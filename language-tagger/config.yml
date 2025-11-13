@@ -1,0 +1,32 @@
+# Langarr Configuration
+#
+# API keys and URLs are loaded from environment variables (via docker-compose.yml env_file)
+# Required env vars: RADARR_URL, RADARR_API_KEY, SONARR_URL, SONARR_API_KEY
+#
+# For multiple instances, use: RADARR_INSTANCENAME_URL, RADARR_INSTANCENAME_API_KEY
+
+schedule:
+  interval_hours: 24
+  run_on_startup: true
+
+radarr:
+  main:
+    enabled: true
+    # base_url and api_key loaded from env: RADARR_URL, RADARR_API_KEY
+    tag_name: prefer-dub
+    original_profile: Original Preferred
+    dub_profile: Dub Preferred
+    original_languages:
+      - en  # English
+      - de  # German
+
+sonarr:
+  main:
+    enabled: true
+    # base_url and api_key loaded from env: SONARR_URL, SONARR_API_KEY
+    tag_name: prefer-dub
+    original_profile: Original Preferred
+    dub_profile: Dub Preferred
+    original_languages:
+      - en  # English
+      - de  # German

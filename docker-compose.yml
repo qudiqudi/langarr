@@ -1,0 +1,38 @@
+version: '3.8'
+
+services:
+  recyclarr:
+    image: ghcr.io/recyclarr/recyclarr
+    container_name: recyclarr
+    env_file:
+      - .env
+    volumes:
+      - ./recyclarr:/config
+    networks:
+      - ${DOCKER_NETWORK}
+    user: ${PUID}:${PGID}
+
+  language-tagger:
+    build: ./language-tagger
+    container_name: langarr-tagger
+    depends_on:
+      - recyclarr
+    env_file:
+      - .env
+    environment:
+      - RUN_MODE=schedule
+      - CONFIG_PATH=/config/config.yml
+    volumes:
+      - ./language-tagger:/config:ro
+    networks:
+      - ${DOCKER_NETWORK}
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  ${DOCKER_NETWORK}:
+    external: true

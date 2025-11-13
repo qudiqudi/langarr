@@ -1,0 +1,97 @@
+# Langarr Configuration Template
+#
+# SETUP:
+# 1. Copy .env.example to .env and fill in your Radarr/Sonarr URLs and API keys
+# 2. Customize this file for your preferences (language codes, profile names, etc.)
+#
+# NOTE: base_url and api_key are loaded from environment variables, not from this file!
+# Required env vars: RADARR_URL, RADARR_API_KEY, SONARR_URL, SONARR_API_KEY
+
+schedule:
+  interval_hours: 24  # How often to run (in hours)
+  run_on_startup: true  # Run immediately when container starts
+
+radarr:
+  main:
+    enabled: true
+    # base_url and api_key loaded from: RADARR_URL, RADARR_API_KEY (set in .env)
+
+    # Tag and profile names (must match your Radarr quality profiles)
+    tag_name: prefer-dub
+    original_profile: Original Preferred
+    dub_profile: Dub Preferred
+
+    # Languages to consider as "original" - keeps original audio
+    # All other languages will get dubbed audio when available
+    #
+    # Use standard 2-letter ISO 639-1 codes (en, de, fr, es, ja, etc.)
+    # The script automatically detects format (integers/codes) from your instance
+    original_languages:
+      - en  # English
+      - de  # German
+
+  # Add more Radarr instances if needed
+  # radarr-4k:
+  #   enabled: true
+  #   base_url: http://radarr-4k:7878
+  #   api_key: YOUR_API_KEY
+  #   tag_name: prefer-dub
+  #   original_profile: Original Preferred
+  #   dub_profile: Dub Preferred
+  #   original_languages:
+  #     - en
+  #     - de
+
+# Sonarr instances
+sonarr:
+  main:
+    enabled: true
+    base_url: http://sonarr:8989
+    api_key: YOUR_SONARR_API_KEY  # Get from Sonarr -> Settings -> General -> Security -> API Key
+
+    # Tag and profile names (must match your Sonarr quality profiles)
+    tag_name: prefer-dub
+    original_profile: Original Preferred
+    dub_profile: Dub Preferred
+
+    # Languages to consider as "original"
+    # Use standard 2-letter ISO 639-1 codes (automatic format detection)
+    original_languages:
+      - en  # English
+      - de  # German
+
+  # Add more Sonarr instances if needed
+  # sonarr-anime:
+  #   enabled: true
+  #   base_url: http://sonarr-anime:8989
+  #   api_key: YOUR_API_KEY
+  #   tag_name: prefer-dub
+  #   original_profile: Original Preferred
+  #   dub_profile: Dub Preferred
+  #   original_languages:
+  #     - en
+  #     - de
+  #     - ja  # Japanese - might want to keep Japanese audio for anime
+
+# Common ISO 639-1 Language Codes:
+# en - English
+# de - German
+# fr - French
+# es - Spanish
+# it - Italian
+# ja - Japanese
+# ko - Korean
+# zh - Chinese
+# ru - Russian
+# pt - Portuguese
+# nl - Dutch
+# sv - Swedish
+# no - Norwegian
+# da - Danish
+# fi - Finnish
+# pl - Polish
+# cs - Czech
+# hu - Hungarian
+# tr - Turkish
+# ar - Arabic
+# hi - Hindi
