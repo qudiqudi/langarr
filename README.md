@@ -1,5 +1,16 @@
 # Langarr
 
+> **⚠️ CAUTION: AI-Generated Code**
+>
+> This project was developed with AI assistance (Claude Code). While functional, you should:
+> - **Review all code** before running in production
+> - **Verify environment variables** in `.env` match your setup
+> - **Check `requirements.txt`** and all dependencies for security
+> - **Test with dry-run mode first** (`DRY_RUN=true`) before making changes
+> - **Backup your Radarr/Sonarr databases** before use
+>
+> Use at your own risk. No warranties provided.
+
 **Language-based automatic profile management for Radarr & Sonarr**
 
 Langarr automatically assigns quality profiles based on a movie/show's original language. Perfect for multilingual media libraries where you want dubbed audio for foreign content but original audio for select languages.
