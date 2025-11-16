@@ -36,93 +36,111 @@ Langarr automatically assigns quality profiles based on a movie/show's original 
 
 ## Prerequisites
 
-Before installing Langarr, you need:
+Langarr integrates into your existing media stack. You need:
 
 - **Radarr** v3+ (v4+ recommended) and/or **Sonarr** v3+ (v4 required for full language support)
-- **Docker** & **Docker Compose** installed
-- **Docker network** connecting your media services:
-  ```bash
-  # List your existing networks
-  docker network ls
-
-  # If you don't have one, create it
-  docker network create media-stack
-
-  # Connect your existing Radarr/Sonarr to the network
-  docker network connect media-stack radarr
-  docker network connect media-stack sonarr
-  ```
+- **Recyclarr** already configured and running in your docker-compose stack
+- **Docker** & **Docker Compose** with your services on a shared network
 - **API Keys** from Radarr/Sonarr (Settings → General → Security → API Key)
 
-## Quick Start
+## Installation
+
+Langarr is designed to integrate into your existing docker-compose stack.
+
+### Step 1: Clone the repository
 
 ```bash
-# Clone repository
-git clone https://github.com/qudiqudi/langarr.git
-cd langarr
+git clone https://github.com/qudiqudi/langarr.git /path/to/langarr
+cd /path/to/langarr
+```
 
-# Configure environment
-cp .env.example .env
-nano .env  # Edit with your settings (see below)
+### Step 2: Add recyclarr configuration
 
-# Start services
-docker-compose up -d
+Copy the included `recyclarr.yml` to your existing recyclarr config directory:
 
-# Monitor initial setup (wait 2-3 minutes for recyclarr to create profiles)
-docker logs -f recyclarr
+```bash
+# Find your recyclarr config directory (check your docker-compose.yml volumes)
+# Example: /path/to/appdata/recyclarr:/config
 
-# Once recyclarr finishes, check language tagger
+cp recyclarr/recyclarr.yml /path/to/your/recyclarr/config/
+```
+
+**Then trigger a recyclarr sync** to create the two new quality profiles:
+
+```bash
+docker exec recyclarr recyclarr sync
+```
+
+Verify the profiles were created: **Radarr/Sonarr → Settings → Profiles**
+- You should see `Original Preferred` and `Dub Preferred`
+
+### Step 3: Add langarr-tagger to your docker-compose.yml
+
+Copy the service from `docker-compose.yml` into your existing stack's docker-compose file. Update these values:
+
+```yaml
+services:
+  langarr-tagger:
+    build: /path/to/langarr/language-tagger  # Path where you cloned langarr
+    # ... rest of the service definition ...
+    volumes:
+      - /path/to/langarr/language-tagger:/config:ro  # Same path as build
+    networks:
+      - your_network_name  # Your existing docker network (e.g., t2_proxy)
+```
+
+### Step 4: Configure languages
+
+Edit `language-tagger/config.yml` to set your preferred "original" languages:
+
+```yaml
+original_languages:
+  - en  # English
+  - de  # German
+  # Add more as needed
+```
+
+### Step 5: Start the language-tagger
+
+```bash
+# From your main docker-compose directory
+docker-compose up -d langarr-tagger
+
+# Monitor the logs
 docker logs -f langarr-tagger
 ```
 
 ### What Happens Next?
 
-1. **Recyclarr runs** (~1-2 minutes): Creates two new quality profiles in your Radarr/Sonarr
-   - Check Radarr/Sonarr → Settings → Profiles - you should see "Original Preferred" and "Dub Preferred"
+1. **Language Tagger runs** (~5-30 seconds depending on library size):
+   - Analyzes each movie/show's original language from Radarr/Sonarr
+   - Assigns `Original Preferred` profile to content in your configured languages
+   - Assigns `Dub Preferred` profile + `prefer-dub` tag to foreign content
 
-2. **Language Tagger runs** (~5-30 seconds depending on library size):
-   - Analyzes each movie/show's original language
-   - Assigns appropriate profile
-   - Adds `prefer-dub` tag to foreign content
-
-3. **Verify it worked:**
+2. **Verify it worked:**
    - Check Radarr/Sonarr UI for the new tag `prefer-dub`
    - Foreign language content should have "Dub Preferred" profile
-   - Native language content should have "Original Preferred" profile
+   - Native language content (en/de by default) should have "Original Preferred" profile
 
-4. **Auto-updates:** Runs every 24 hours to process new additions
+3. **Auto-updates:** Runs every 24 hours to automatically tag new additions
 
 ## Configuration
 
-### Required Settings (.env)
+### Environment Variables
 
-```bash
-# Timezone (for logs and scheduling)
-TZ=Europe/Berlin
+The langarr-tagger service uses your existing environment variables (likely already defined for recyclarr):
 
-# User/Group IDs - Must match your Radarr/Sonarr container user
-# Find with: docker exec radarr id
-# Most systems: PUID=1000, PGID=1000
-PUID=1000
-PGID=1000
+- `TZ` - Timezone for logs
+- `RADARR_URL` - Radarr URL (e.g., `http://radarr:7878`)
+- `RADARR_API_KEY` - Your Radarr API key
+- `SONARR_URL` - Sonarr URL (e.g., `http://sonarr:8989`)
+- `SONARR_API_KEY` - Your Sonarr API key
 
-# Radarr Configuration
-RADARR_URL=http://radarr:7878            # Use container name if on same docker network
-RADARR_API_KEY=your_key_here             # Settings → General → Security → API Key
+These are typically already in your `.env` file or defined in your docker-compose. The langarr-tagger service will inherit them.
 
-# Sonarr Configuration
-SONARR_URL=http://sonarr:8989            # Use container name if on same docker network
-SONARR_API_KEY=your_key_here             # Settings → General → Security → API Key
+**Optional:** Set `DRY_RUN=true` to preview changes without applying them (useful for testing).
 
-# Docker Network - Must exist and contain Radarr/Sonarr (see Prerequisites)
-DOCKER_NETWORK=media-stack
-```
-
-**Note:** If your Radarr/Sonarr use different ports or are on different hosts, adjust the URLs accordingly:
-- External host: `http://192.168.1.100:7878`
-- Custom port: `http://radarr:7879`
-
-### Customize Languages (language-tagger/config.yml)
+### Language Configuration (language-tagger/config.yml)
 
 Configure which languages should keep their original audio:
 
