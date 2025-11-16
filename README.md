@@ -1,4 +1,8 @@
-# Langarr
+<div align="center">
+  <img src="icon.png" alt="Langarr Logo" width="200"/>
+
+  # Langarr
+</div>
 
 > **⚠️ CAUTION: AI-Generated Code**
 >
