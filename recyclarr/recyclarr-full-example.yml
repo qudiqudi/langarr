@@ -1,19 +1,13 @@
 # yaml-language-server: $schema=https://raw.githubusercontent.com/recyclarr/recyclarr/master/schemas/config-schema.json
 
-# Langarr - Recyclarr Configuration with Dual Profile Strategy
+# Recyclarr Configuration with Dual Profile Strategy
 # Documentation: https://recyclarr.dev
 #
-# ⚠️  CONFIGURED FOR GERMAN DUBS
-# This uses TRaSH Guide's German-specific custom formats.
-# To adapt for French/Spanish/etc., see README.md "Adapting for Other Languages"
-#
 # This configuration creates TWO quality profiles:
-# 1. "Original Preferred" - Prefers original audio (scores German-only releases lower)
-# 2. "Dub Preferred" - Prefers German dub (scores German-only releases higher)
+# 1. "Original Preferred" - For English/German content (keeps original audio)
+# 2. "Dub Preferred" - For other languages (prefers German dub)
 #
-# The langarr-tagger ASSIGNS profiles based on content's original language:
-# - English/German content → Original Preferred (you understand it, keep original)
-# - French/Japanese/etc → Dub Preferred (you need a dub to understand it)
+# The arr-language-tagger container auto-assigns profiles based on original language
 
 ###################################################################################################
 # Radarr Configuration
@@ -26,7 +20,7 @@ radarr:
     api_key: !env_var RADARR_API_KEY
     delete_old_custom_formats: true
     replace_existing_custom_formats: true
-    
+
     # Include quality definitions and German custom formats from TRaSH Guides
     include:
       - template: radarr-quality-definition-movie
@@ -54,7 +48,7 @@ radarr:
             score: 15000
           - name: Dub Preferred
             score: 15000
-      
+
       - trash_ids:
           - 6aad77771dabe9d3e9d7be86f310b867  # German DL (undefined)
         assign_scores_to:
@@ -361,8 +355,8 @@ radarr:
             score: 0  # Neutral - allow original as fallback, prefer German dub when available
 
     quality_profiles:
-      # PROFILE 1: Original Preferred (for native language content)
-      # Dual-language (DL) best, then original, then dub as last resort
+      # PROFILE 1: Original Preferred (for English/German content)
+      # German DL best, then original, then German dub as last resort
       - name: Original Preferred
         reset_unmatched_scores:
           enabled: true
@@ -383,8 +377,8 @@ radarr:
               - WEBDL-720p
               - WEBRip-720p
 
-      # PROFILE 2: Dub Preferred (for foreign content)
-      # Dual-language (DL) best, then dub, then original as fallback
+      # PROFILE 2: Dub Preferred (for non-English/German content)
+      # German DL best, then German dub, then original as fallback
       - name: Dub Preferred
         reset_unmatched_scores:
           enabled: true
@@ -654,7 +648,7 @@ sonarr:
             score: 0  # Neutral - allow original as fallback, prefer German dub when available
 
     quality_profiles:
-      # PROFILE 1: Original Preferred (for native language content)
+      # PROFILE 1: Original Preferred (for English/German content)
       - name: Original Preferred
         reset_unmatched_scores:
           enabled: true
@@ -675,7 +669,7 @@ sonarr:
               - WEBDL-720p
               - WEBRip-720p
 
-      # PROFILE 2: Dub Preferred (for foreign content)
+      # PROFILE 2: Dub Preferred (for non-English/German content)
       - name: Dub Preferred
         reset_unmatched_scores:
           enabled: true
