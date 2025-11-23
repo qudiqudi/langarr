@@ -54,18 +54,20 @@ git clone https://github.com/qudiqudi/langarr.git /path/to/langarr
 cd /path/to/langarr
 ```
 
-### Step 2: Add recyclarr configuration
+### Step 2: Configure recyclarr profiles
 
-Copy the included `recyclarr.yml` to your existing recyclarr config directory:
+Langarr requires two quality profiles: `Original Preferred` and `Dub Preferred`.
 
-```bash
-# Find your recyclarr config directory (check your docker-compose.yml volumes)
-# Example: /path/to/appdata/recyclarr:/config
+**Choose your approach:**
 
-cp recyclarr/recyclarr.yml /path/to/your/recyclarr/config/
-```
+- **New to recyclarr?** Copy the full example:
+  ```bash
+  cp recyclarr/recyclarr-full-example.yml /path/to/your/recyclarr/config/recyclarr.yml
+  ```
 
-**Then trigger a recyclarr sync** to create the two new quality profiles:
+- **Existing recyclarr config?** See [`recyclarr/README.md`](recyclarr/README.md) for how to ADD the profiles to your existing configuration without losing your custom formats.
+
+**After updating your config, sync recyclarr:**
 
 ```bash
 docker exec recyclarr recyclarr sync
