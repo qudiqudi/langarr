@@ -8,10 +8,12 @@
 # To adapt for French/Spanish/etc., see README.md "Adapting for Other Languages"
 #
 # This configuration creates TWO quality profiles:
-# 1. "Original Preferred" - For content in your native languages (keeps original audio)
-# 2. "Dub Preferred" - For foreign content (prefers dub, accepts original as fallback)
+# 1. "Original Preferred" - Prefers original audio (scores German-only releases lower)
+# 2. "Dub Preferred" - Prefers German dub (scores German-only releases higher)
 #
-# The langarr-tagger container auto-assigns profiles based on original language
+# The langarr-tagger ASSIGNS profiles based on content's original language:
+# - English/German content → Original Preferred (you understand it, keep original)
+# - French/Japanese/etc → Dub Preferred (you need a dub to understand it)
 
 ###################################################################################################
 # Radarr Configuration

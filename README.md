@@ -24,12 +24,12 @@ Langarr automatically assigns quality profiles based on a movie/show's original 
 ## What It Does
 
 1. **Recyclarr** creates two quality profiles in your Radarr/Sonarr:
-   - `Original Preferred` - For content in your native languages (keeps original audio)
-   - `Dub Preferred` - For foreign content (prefers dub in your language, accepts original as fallback)
+   - `Original Preferred` - Prefers releases with original audio track (scores dub-only releases lower)
+   - `Dub Preferred` - Prefers releases with dubbed audio (scores dub-only releases higher)
 
-2. **Language Tagger** automatically assigns the correct profile:
-   - Shows in your configured languages → `Original Preferred`
-   - Foreign language shows → `Dub Preferred` + tagged `prefer-dub`
+2. **Language Tagger** automatically assigns the correct profile based on content's original language:
+   - Original language is one you understand (en/de) → `Original Preferred` (keep original audio)
+   - Original language is foreign (fr/ja/ko/etc) → `Dub Preferred` + `prefer-dub` tag (get dub)
    - The `prefer-dub` tag helps you filter and identify foreign content in your library
 
 3. Runs automatically every 24 hours to tag new content

@@ -1,8 +1,12 @@
 # Recyclarr Integration Guide
 
 Langarr requires TWO quality profiles in your Radarr/Sonarr:
-- **Original Preferred** - For content in your native languages (en/de)
-- **Dub Preferred** - For foreign content (prefers German dub)
+- **Original Preferred** - Prefers original audio track (scores dub-only releases lower)
+- **Dub Preferred** - Prefers dubbed audio (scores dub-only releases higher)
+
+The Language Tagger then assigns these profiles based on content's original language:
+- English/German content → Original Preferred (you understand it, keep original audio)
+- French/Japanese/etc → Dub Preferred (you need a dub to understand it)
 
 ## Integration Options
 

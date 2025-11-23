@@ -2,10 +2,11 @@
 """
 Arr Language Auto-Tagger
 =========================
-Automatically tags Radarr/Sonarr content based on original language and assigns quality profiles.
+Automatically assigns quality profiles to Radarr/Sonarr content based on original language.
 
-- Content in your configured native languages → Profile: "Original Preferred"
-- Content in other languages → Tagged "prefer-dub" → Profile: "Dub Preferred"
+Profile Assignment Logic:
+- Content's original language is one you understand (en/de) → "Original Preferred" profile
+- Content's original language is foreign (fr/ja/ko/etc) → "Dub Preferred" profile + "prefer-dub" tag
 
 Features:
 - Automatic language format detection (works with integer IDs, language codes, or names)
