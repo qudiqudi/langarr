@@ -21,26 +21,26 @@ schedule:
 # Automatically sets correct quality profiles on Overseerr requests
 # BEFORE they are sent to Radarr/Sonarr
 # Uncomment and configure to enable
-#overseerr:
-#  main:                     # Instance name
-#    enabled: true
-#
-#    # Connection details (loaded from env vars if not specified)
-#    # Requires: OVERSEERR_URL and OVERSEERR_API_KEY environment variables
-#
-#    # Map Overseerr server IDs to langarr instance names
-#    # To find server IDs: Overseerr → Settings → Services → click server → check URL
-#    # Example: /settings/services/radarr/1 ← server ID is 1
-#    radarr_servers:
-#      1: main               # Overseerr Radarr server ID 1 → langarr radarr.main
-#      # 2: 4k               # Example: Multiple servers
-#
-#    sonarr_servers:
-#      1: main               # Overseerr Sonarr server ID 1 → langarr sonarr.main
-#      # 2: 4k               # Example: Multiple servers
-#
-#    # Polling interval for pending requests (only used if webhook.enabled = false)
-#    poll_interval_minutes: 10
+overseerr:
+  main:                     # Instance name
+    enabled: true
+
+    # Connection details (loaded from env vars if not specified)
+    # Requires: OVERSEERR_URL and OVERSEERR_API_KEY environment variables
+
+    # Map Overseerr server IDs to langarr instance names
+    # To find server IDs: Use API or run the python command shown in docs
+    # Note: Some Seerr/Overseerr instances use ID 0 for the first/default server
+    radarr_servers:
+      0: main               # Overseerr Radarr server ID 0 → langarr radarr.main
+      # 2: 4k               # Example: Multiple servers
+
+    sonarr_servers:
+      0: main               # Overseerr Sonarr server ID 0 → langarr sonarr.main
+      # 2: 4k               # Example: Multiple servers
+
+    # Polling interval for pending requests (only used if webhook.enabled = false)
+    poll_interval_minutes: 10
 
 radarr:
   main:
