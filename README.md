@@ -194,6 +194,174 @@ Langarr supports multiple instances (e.g., separate 4K Radarr, Anime Sonarr):
 
 If you want different profile names, edit `recyclarr/recyclarr.yml` and `language-tagger/config.yml` to match.
 
+## Overseerr Integration (Optional)
+
+Langarr can optionally integrate with Overseerr to automatically set correct quality profiles on requests **BEFORE** they are sent to Radarr/Sonarr.
+
+### Why Use Overseerr Integration?
+
+**Without Overseerr Integration:**
+- Langarr updates profiles in Radarr/Sonarr every 24 hours
+- Wrong profile might be used initially, then corrected later
+
+**With Overseerr Integration:**
+- Manual requests: ProfileId updated in Overseerr before approval ✨
+- Auto-approved requests: Profile updated in Radarr/Sonarr within 2-5 minutes + automatic search triggered 🚀
+- Downloads start with the **correct quality immediately**
+
+### ⚠️ CRITICAL: Required Overseerr Settings
+
+To prevent wrong quality downloads (especially with auto-approve), you **MUST** disable automatic search in Overseerr:
+
+#### Step 1: Disable "Enable Automatic Search" in Overseerr
+
+**For each Radarr/Sonarr server in Overseerr:**
+
+1. Go to **Overseerr → Settings → Services**
+2. Click on your **Radarr** server
+3. **UNCHECK** ❌ "Enable Automatic Search"
+4. Click **Save Changes**
+5. Repeat for **Sonarr** servers
+
+![Overseerr Settings](docs/overseerr-disable-search.png)
+
+**What this does:**
+- Items are added to Radarr/Sonarr as "monitored" but **NOT searched immediately**
+- Langarr has time to set the correct profile
+- Langarr triggers search after profile is aligned
+- Downloads start with correct quality ✅
+
+#### Step 2: Verify RSS Sync is Enabled in Radarr/Sonarr
+
+**In Radarr:**
+1. Go to **Settings → Indexers**
+2. For each indexer, ensure **"Enable RSS Sync"** is checked ✅
+3. RSS Sync Interval: **15-30 minutes** recommended
+
+Repeat for Sonarr.
+
+**Result:** Downloads start 2-5 minutes after approval with correct profile (via triggered search), with RSS Sync as a backup.
+
+### Configuration
+
+#### 1. Add Environment Variables
+
+Add to your `.env` file:
+
+```bash
+# Overseerr (optional)
+OVERSEERR_URL=http://overseerr:5055
+OVERSEERR_API_KEY=your-overseerr-api-key-here
+```
+
+**Finding your Overseerr API Key:**
+- Overseerr → Settings → General → API Key
+
+#### 2. Update `language-tagger/config.yml`
+
+Add the `overseerr` section:
+
+```yaml
+# Overseerr Integration (OPTIONAL - remove this section to disable)
+overseerr:
+  main:                     # Instance name
+    enabled: true           # Set to false to disable
+
+    # Connection loaded from env: OVERSEERR_URL, OVERSEERR_API_KEY
+
+    # Map Overseerr server IDs to langarr instance names
+    # To find server IDs: Overseerr → Settings → Services → click server → check URL
+    # Example: /settings/services/radarr/1 ← server ID is 1
+    radarr_servers:
+      1: main               # Overseerr Radarr server ID 1 → langarr radarr.main
+      # 2: 4k               # Example: Multiple servers
+
+    sonarr_servers:
+      1: main               # Overseerr Sonarr server ID 1 → langarr sonarr.main
+      # 2: 4k               # Example: Multiple servers
+```
+
+**Finding Overseerr Server IDs:**
+
+1. Go to **Overseerr → Settings → Services**
+2. Click on a Radarr/Sonarr server
+3. Look at the URL: `/settings/services/radarr/1` ← Server ID is **1**
+4. Use this number in your `radarr_servers` mapping
+
+#### 3. (Optional) Adjust Search Behavior
+
+In `config.yml`, you can configure triggered search behavior:
+
+```yaml
+radarr:
+  main:
+    # ... existing config ...
+
+    # Triggered Search Options (defaults shown)
+    trigger_search_on_update: true      # Auto-search after profile update
+    search_cooldown_seconds: 60         # Don't search same item within 60s
+    min_search_interval_seconds: 5      # Min time between ANY searches
+```
+
+### How It Works
+
+#### For Manual Approvals:
+```
+1. User requests "Parasite" (Korean movie)
+2. Langarr detects pending request in Overseerr
+3. Langarr updates profileId to "Dub Preferred" in Overseerr
+4. Admin approves request
+5. Overseerr sends to Radarr with correct profile ✅
+6. Download starts immediately with correct quality
+```
+
+#### For Auto-Approved Requests:
+```
+1. User requests "Parasite" (auto-approve enabled)
+2. Overseerr instantly approves and sends to Radarr (default profile, NO search)
+3. Langarr runs (every 24 hours, or on-demand)
+4. Langarr detects new movie, updates profile to "Dub Preferred"
+5. Langarr triggers MoviesSearch command in Radarr
+6. Radarr searches indexers and downloads with correct quality ✅
+```
+
+**Timing:**
+- Without Overseerr: Profile corrected within 24 hours (next scheduled run)
+- With Overseerr: Profile corrected + search triggered within 2-5 minutes 🚀
+
+### Disabling Overseerr Integration
+
+To disable, either:
+- Set `enabled: false` in config
+- Remove the `overseerr` section entirely from `config.yml`
+
+Langarr will work normally, updating profiles directly in Radarr/Sonarr only.
+
+### Troubleshooting
+
+**Q: Auto-approved requests download wrong quality**
+- **A:** Did you disable "Enable Automatic Search" in Overseerr Settings → Services? This is **REQUIRED**.
+
+**Q: Downloads don't start after profile update**
+- **A:** Check that RSS Sync is enabled in Radarr/Sonarr indexer settings
+- **A:** Verify `trigger_search_on_update: true` in config (default)
+- **A:** Check logs: `docker logs langarr-tagger | grep "Triggered search"`
+
+**Q: Langarr can't connect to Overseerr**
+- **A:** Verify `OVERSEERR_URL` and `OVERSEERR_API_KEY` in your `.env` file
+- **A:** Test connectivity: `docker exec langarr-tagger curl http://overseerr:5055/api/v1/status`
+- **A:** Ensure containers are on the same Docker network
+
+**Q: Profile mapping not working**
+- **A:** Verify server IDs match: Overseerr → Settings → Services → check URL
+- **A:** Ensure profile names match exactly: "Original Preferred" and "Dub Preferred"
+- **A:** Check logs for mapping errors: `docker logs langarr-tagger | grep "Mapped"`
+
+**Q: Triggered searches not working**
+- **A:** Verify Radarr/Sonarr API connectivity
+- **A:** Check indexer configuration (at least one indexer with "Enable Automatic Search")
+- **A:** View logs: `docker logs langarr-tagger | grep "search"`
+
 ## How It Works
 
 1. **Initial Setup**: Recyclarr syncs quality profiles and custom formats to Radarr/Sonarr

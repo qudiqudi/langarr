@@ -23,6 +23,8 @@ services:
       - no-new-privileges:true
     depends_on:
       - recyclarr  # Your existing recyclarr service
+    ports:
+      - "5678:5678"  # Webhook server port (for Seerr/Overseerr webhooks)
     environment:
       # Script configuration
       - RUN_MODE=schedule
@@ -33,6 +35,9 @@ services:
       - RADARR_API_KEY=${RADARR_API_KEY}
       - SONARR_URL=${SONARR_URL}
       - SONARR_API_KEY=${SONARR_API_KEY}
+      # Optional: Overseerr integration (uncomment to enable)
+      # - OVERSEERR_URL=${OVERSEERR_URL}
+      # - OVERSEERR_API_KEY=${OVERSEERR_API_KEY}
       # Optional: Multiple instances (if you have 4K/Anime instances)
       # - RADARR_4K_URL=${RADARR_4K_URL}
       # - RADARR_4K_API_KEY=${RADARR_4K_API_KEY}

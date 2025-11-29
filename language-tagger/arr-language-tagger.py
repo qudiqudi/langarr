@@ -24,6 +24,8 @@ import schedule
 import fcntl
 from typing import List, Dict, Optional
 from pathlib import Path
+from overseerr_integration import OverseerrInstance
+from webhook_server import WebhookServer
 
 # Configure logging
 logging.basicConfig(
@@ -131,6 +133,15 @@ class ArrInstance:
         # Rate limiting (seconds between updates)
         self.update_delay = float(os.environ.get('UPDATE_DELAY', '0.5'))
 
+        # Triggered search configuration
+        self.trigger_search_on_update = config.get('trigger_search_on_update', True)
+        self.search_cooldown_seconds = config.get('search_cooldown_seconds', 60)
+        self.min_search_interval_seconds = config.get('min_search_interval_seconds', 5)
+
+        # Search tracking
+        self.last_triggered_searches = {}  # {item_id: timestamp}
+        self.last_any_search = 0
+
     def _get(self, endpoint: str) -> dict:
         """Make GET request to Arr API."""
         url = f"{self.base_url}/api/v3/{endpoint}"
@@ -163,6 +174,66 @@ class ArrInstance:
         except requests.exceptions.RequestException as e:
             logger.error(f"[{self.name}] PUT request failed for {endpoint}: {e}")
             raise
+
+    def trigger_search_for_item(self, item_id: int, endpoint: str) -> bool:
+        """
+        Trigger automatic search for specific item after profile update.
+
+        Args:
+            item_id: The movie or series ID
+            endpoint: 'movie' or 'series'
+
+        Returns:
+            True if search was triggered, False if skipped
+        """
+        if not self.trigger_search_on_update:
+            return False
+
+        # Check per-item cooldown
+        if item_id in self.last_triggered_searches:
+            last_search = self.last_triggered_searches[item_id]
+            time_since = time.time() - last_search
+            if time_since < self.search_cooldown_seconds:
+                logger.debug(f"[{self.name}] Skipping search for {endpoint} {item_id} "
+                           f"(searched {time_since:.0f}s ago, cooldown: {self.search_cooldown_seconds}s)")
+                return False
+
+        # Check global search rate limit
+        time_since_any = time.time() - self.last_any_search
+        if time_since_any < self.min_search_interval_seconds:
+            wait_time = self.min_search_interval_seconds - time_since_any
+            logger.debug(f"[{self.name}] Waiting {wait_time:.1f}s for search rate limit...")
+            time.sleep(wait_time)
+
+        # Build search command
+        if endpoint == 'movie':
+            command = {
+                'name': 'MoviesSearch',
+                'movieIds': [item_id]
+            }
+        else:  # series
+            command = {
+                'name': 'SeriesSearch',
+                'seriesId': item_id
+            }
+
+        # Execute search
+        if self.dry_run:
+            logger.info(f"[{self.name}] [DRY-RUN] Would trigger search: {command}")
+            return False
+
+        try:
+            self._post('command', command)
+            logger.info(f"[{self.name}] ✓ Triggered search for {endpoint} ID {item_id}")
+
+            # Update tracking
+            self.last_triggered_searches[item_id] = time.time()
+            self.last_any_search = time.time()
+
+            return True
+        except Exception as e:
+            logger.warning(f"[{self.name}] Failed to trigger search for {endpoint} {item_id}: {e}")
+            return False
 
     def test_connection(self) -> bool:
         """Test API connection."""
@@ -321,6 +392,38 @@ class ArrInstance:
         logger.info(f"[{self.name}] Found {len(items)} {endpoint}")
         return items
 
+    def find_item_by_tmdb_id(self, tmdb_id: int) -> Optional[Dict]:
+        """
+        Find a movie or series by TMDB ID.
+
+        Args:
+            tmdb_id: The TMDB ID to search for
+
+        Returns:
+            Item dict if found, None otherwise
+        """
+        try:
+            endpoint = "movie" if self.service_type == "radarr" else "series"
+            items = self._get(endpoint)
+
+            for item in items:
+                if self.service_type == "radarr":
+                    # Radarr uses tmdbId
+                    if item.get('tmdbId') == tmdb_id:
+                        return item
+                else:
+                    # Sonarr uses tvdbId primarily, but also has tmdbId in some versions
+                    # Check both to be safe
+                    if item.get('tmdbId') == tmdb_id:
+                        return item
+
+            logger.debug(f"[{self.name}] No {endpoint} found with TMDB ID {tmdb_id}")
+            return None
+
+        except Exception as e:
+            logger.error(f"[{self.name}] Error finding item by TMDB ID {tmdb_id}: {e}")
+            return None
+
     def should_prefer_dub(self, item: Dict) -> bool:
         """Determine if item should prefer dubbed audio based on original language."""
         original_lang_obj = item.get('originalLanguage')
@@ -344,10 +447,20 @@ class ArrInstance:
         # If we have a language mapping, use it; otherwise fall back to direct comparison
         if self.language_id_map:
             # If language ID is in our mapped set, it's an "original" language
-            return original_lang not in self.language_id_map
-        else:
-            # Fallback: direct comparison (for backward compatibility)
-            return original_lang not in self.original_languages
+            if original_lang in self.language_id_map:
+                return False  # It's an original language, don't prefer dub
+
+        # Fallback: direct comparison with configured language codes
+        # This handles webhook scenarios where we get ISO codes like 'en', 'ko'
+        # Convert to string and lowercase for comparison
+        original_lang_str = str(original_lang).lower().strip()
+        for config_lang in self.original_languages:
+            config_str = str(config_lang).lower().strip()
+            if original_lang_str == config_str:
+                return False  # It's an original language, don't prefer dub
+
+        # Not in original languages, prefer dub
+        return True
 
     def update_item(self, item: Dict, add_tag: bool) -> bool:
         """Update item with appropriate tag and quality profile."""
@@ -387,10 +500,14 @@ class ArrInstance:
                 needs_update = True
                 changes.append(f"remove tag '{self.tag_name}'")
 
+        # Track if profile was changed
+        profile_changed = False
+
         # Update profile if needed
         if current_profile_id != target_profile_id:
             new_profile_id = target_profile_id
             needs_update = True
+            profile_changed = True
             changes.append(f"set profile to '{target_profile_name}'")
 
         if needs_update:
@@ -413,6 +530,12 @@ class ArrInstance:
                     # Rate limiting
                     if self.update_delay > 0:
                         time.sleep(self.update_delay)
+
+                    # Trigger search if profile was changed
+                    if profile_changed:
+                        logger.debug(f"[{self.name}] Profile updated for '{title}', checking if search should be triggered...")
+                        time.sleep(1)  # Brief delay to ensure update is processed
+                        self.trigger_search_for_item(item_id, endpoint)
 
                     return True
                 except Exception as e:
@@ -499,9 +622,13 @@ class ArrLanguageTagger:
         self.config = self.load_config()
         self.validate_config()
         self.instances = []
+        self.overseerr_instances = []
+        self.webhook_server = None
 
         # Initialize instances
         self.init_instances()
+        self.init_overseerr()
+        self.init_webhook()
 
     def load_config(self) -> dict:
         """Load configuration from YAML file."""
@@ -602,6 +729,59 @@ class ArrLanguageTagger:
         if not self.instances:
             logger.warning("No enabled instances found in configuration!")
 
+    def init_overseerr(self) -> None:
+        """Initialize Overseerr instances from config (optional)."""
+        if 'overseerr' not in self.config:
+            logger.info("Overseerr integration disabled (not in config)")
+            return
+
+        for name, config in self.config['overseerr'].items():
+            if not config.get('enabled', True):
+                logger.info(f"Skipping disabled Overseerr instance: {name}")
+                continue
+
+            # Override with environment variables if available
+            config = config.copy()  # Don't modify original config
+            config['api_key'] = self.get_env_override('overseerr', name, 'api_key', config.get('api_key'))
+            config['base_url'] = self.get_env_override('overseerr', name, 'base_url', config.get('base_url'))
+
+            try:
+                logger.info(f"Initializing Overseerr instance: {name}")
+                instance = OverseerrInstance(name, config, self.instances)
+                self.overseerr_instances.append(instance)
+            except ValueError as e:
+                logger.error(f"Failed to initialize Overseerr instance '{name}': {e}")
+                sys.exit(1)
+
+        if self.overseerr_instances:
+            logger.info(f"Initialized {len(self.overseerr_instances)} Overseerr instance(s)")
+
+    def init_webhook(self) -> None:
+        """Initialize webhook server from config (optional)."""
+        if 'webhook' not in self.config:
+            logger.info("Webhook server disabled (not in config)")
+            return
+
+        webhook_config = self.config['webhook']
+        if not webhook_config.get('enabled', False):
+            logger.info("Webhook server disabled (enabled=false)")
+            return
+
+        port = webhook_config.get('port', 5678)
+        auth_token = webhook_config.get('auth_token', None)
+
+        try:
+            logger.info(f"Initializing webhook server on port {port}")
+            self.webhook_server = WebhookServer(
+                port=port,
+                auth_token=auth_token,
+                overseerr_instances=self.overseerr_instances,
+                arr_instances=self.instances
+            )
+        except Exception as e:
+            logger.error(f"Failed to initialize webhook server: {e}")
+            sys.exit(1)
+
     def run_once(self) -> None:
         """Run processing once for all instances."""
         logger.info("="*80)
@@ -611,6 +791,14 @@ class ArrLanguageTagger:
             logger.info("DRY-RUN MODE ENABLED: No changes will be made")
         logger.info("="*80)
 
+        # Process Overseerr requests first (if enabled)
+        for overseerr in self.overseerr_instances:
+            try:
+                overseerr.process_pending_requests()
+            except Exception as e:
+                logger.error(f"Error processing Overseerr '{overseerr.name}': {e}", exc_info=True)
+
+        # Then process Arr instances (safety net)
         success_count = 0
         failure_count = 0
 
@@ -631,6 +819,10 @@ class ArrLanguageTagger:
         run_on_startup = schedule_config.get('run_on_startup', True)
 
         logger.info(f"Scheduling sync every {interval_hours} hours")
+
+        # Start webhook server if configured
+        if self.webhook_server:
+            self.webhook_server.start()
 
         # Schedule the job
         schedule.every(interval_hours).hours.do(self.run_once)
