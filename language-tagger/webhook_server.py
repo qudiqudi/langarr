@@ -147,6 +147,7 @@ class WebhookServer:
                 should_dub = arr.should_prefer_dub(fake_item)
                 correct_profile_name = arr.dub_profile_name if should_dub else arr.original_profile_name
 
+                logger.debug(f"[{arr.name}] Debug: original_language='{original_language}', should_dub={should_dub}, original_languages={arr.original_languages}, language_id_map={arr.language_id_map}")
                 logger.info(f"[{arr.name}] {media_type} TMDB {tmdb_id}: {original_language} → {correct_profile_name}")
 
                 # Find item in Radarr/Sonarr by TMDB ID
