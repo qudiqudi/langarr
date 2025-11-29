@@ -24,11 +24,37 @@ Perfect for multilingual libraries where you want original audio for some langua
 
 ## Installation
 
-### 1. Clone Repository
+### 1. Add Langarr Service
+
+**Using pre-built image (recommended):**
+```yaml
+services:
+  langarr-tagger:
+    image: ghcr.io/qudiqudi/langarr:latest
+    container_name: langarr-tagger
+    ports:
+      - "5678:5678"  # For webhook support
+    environment:
+      - RADARR_URL=${RADARR_URL}
+      - RADARR_API_KEY=${RADARR_API_KEY}
+      - SONARR_URL=${SONARR_URL}
+      - SONARR_API_KEY=${SONARR_API_KEY}
+      - OVERSEERR_URL=${OVERSEERR_URL}  # Optional
+      - OVERSEERR_API_KEY=${OVERSEERR_API_KEY}  # Optional
+    volumes:
+      - ./langarr-config:/config:ro
+    networks:
+      - your_network_name
+    restart: unless-stopped
+```
+
+**Building from source:**
 ```bash
 git clone https://github.com/qudiqudi/langarr.git
 cd langarr
 ```
+
+Then use `build: ./langarr/language-tagger` instead of `image:` in docker-compose.
 
 ### 2. Add Recyclarr Profiles
 
@@ -46,33 +72,34 @@ docker exec recyclarr recyclarr sync
 
 Verify in Radarr/Sonarr → Settings → Profiles
 
-### 3. Add Langarr Service
+### 3. Configure Languages
 
-Copy from `docker-compose.yml` into your stack and update:
-```yaml
-services:
-  langarr-tagger:
-    build: /path/to/langarr/language-tagger
-    volumes:
-      - /path/to/langarr/language-tagger:/config:ro
-    networks:
-      - your_network_name
-```
-
-### 4. Configure Languages
-
-Edit `language-tagger/config.yml`:
+Create `./langarr-config/config.yml`:
 ```yaml
 radarr:
   main:
+    enabled: true
     original_languages:
       - en  # English
       - de  # German
     original_profile: Original Preferred
     dub_profile: Dub Preferred
+
+sonarr:
+  main:
+    enabled: true
+    original_languages:
+      - en
+      - de
+    original_profile: Original Preferred
+    dub_profile: Dub Preferred
+
+webhook:
+  enabled: true
+  port: 5678
 ```
 
-### 5. Start Service
+### 4. Start Service
 
 ```bash
 docker-compose up -d langarr-tagger
