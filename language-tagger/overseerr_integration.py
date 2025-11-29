@@ -227,14 +227,24 @@ class OverseerrInstance:
 
         return profile_name
 
-    def update_request_profile(self, request_id: int, profile_id: int) -> bool:
-        """Update a request's profileId via PUT API."""
+    def update_request_profile(self, request_id: int, profile_id: int, media_type: str) -> bool:
+        """Update a request's profileId via PUT API.
+
+        Args:
+            request_id: The request ID to update
+            profile_id: The new profile ID
+            media_type: 'movie' or 'tv'
+        """
         try:
             if self.dry_run:
                 logger.info(f"[{self.name}] [DRY-RUN] Would update request {request_id} → profileId {profile_id}")
                 return True
 
-            self._put(f"request/{request_id}", {'profileId': profile_id})
+            # Seerr/Overseerr requires mediaType in the PUT body
+            self._put(f"request/{request_id}", {
+                'mediaType': media_type,
+                'profileId': profile_id
+            })
             logger.info(f"[{self.name}] ✓ Updated request {request_id} → profileId {profile_id}")
             time.sleep(self.update_delay)
             return True
@@ -307,7 +317,7 @@ class OverseerrInstance:
         media_title = media.get('title', 'Unknown')
         logger.info(f"[{self.name}] Request {request_id} ('{media_title}'): {original_language} → {correct_profile_name}")
 
-        return self.update_request_profile(request_id, profile_id)
+        return self.update_request_profile(request_id, profile_id, media_type)
 
     def process_pending_requests(self):
         """Process all pending requests and update profileId."""
