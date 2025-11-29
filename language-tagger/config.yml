@@ -4,10 +4,42 @@
 # Required env vars: RADARR_URL, RADARR_API_KEY, SONARR_URL, SONARR_API_KEY
 #
 # For multiple instances, use: RADARR_INSTANCENAME_URL, RADARR_INSTANCENAME_API_KEY
+# For Overseerr (optional): OVERSEERR_URL, OVERSEERR_API_KEY
 
 schedule:
   interval_hours: 24
   run_on_startup: true
+
+# Optional Webhook Server (for real-time Overseerr MEDIA_PENDING events)
+webhook:
+  enabled: false            # Set to true to enable webhook server
+  port: 5678                # Port to listen on (default: 5678)
+  auth_token: ""            # Optional: require token in X-Auth-Token header
+
+# Overseerr Integration (OPTIONAL - remove this section to disable)
+# Automatically sets correct quality profiles on Overseerr requests
+# BEFORE they are sent to Radarr/Sonarr
+overseerr:
+  main:                     # Instance name
+    enabled: true           # Set to false to disable
+
+    # Connection details (loaded from env vars if not specified)
+    # base_url: loaded from OVERSEERR_URL env var
+    # api_key: loaded from OVERSEERR_API_KEY env var
+
+    # Map Overseerr server IDs to langarr instance names
+    # To find server IDs: Overseerr → Settings → Services → click server → check URL
+    # Example: /settings/services/radarr/1 ← server ID is 1
+    radarr_servers:
+      1: main               # Overseerr Radarr server ID 1 → langarr radarr.main
+      # 2: 4k               # Example: Multiple servers
+
+    sonarr_servers:
+      1: main               # Overseerr Sonarr server ID 1 → langarr sonarr.main
+      # 2: 4k               # Example: Multiple servers
+
+    # Polling interval for pending requests (only used if webhook.enabled = false)
+    poll_interval_minutes: 10
 
 radarr:
   main:
@@ -20,6 +52,11 @@ radarr:
       - en  # English
       - de  # German
 
+    # Triggered Search Options (NEW)
+    trigger_search_on_update: true      # Auto-search after profile update (default: true)
+    search_cooldown_seconds: 60         # Don't search same item within 60s (default: 60)
+    min_search_interval_seconds: 5      # Min time between ANY searches (default: 5)
+
 sonarr:
   main:
     enabled: true
@@ -30,3 +67,8 @@ sonarr:
     original_languages:
       - en  # English
       - de  # German
+
+    # Triggered Search Options (NEW)
+    trigger_search_on_update: true      # Auto-search after profile update (default: true)
+    search_cooldown_seconds: 60         # Don't search same item within 60s (default: 60)
+    min_search_interval_seconds: 5      # Min time between ANY searches (default: 5)

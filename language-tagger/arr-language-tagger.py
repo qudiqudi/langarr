@@ -24,6 +24,7 @@ import schedule
 import fcntl
 from typing import List, Dict, Optional
 from pathlib import Path
+from overseerr_integration import OverseerrInstance
 
 # Configure logging
 logging.basicConfig(
@@ -131,6 +132,15 @@ class ArrInstance:
         # Rate limiting (seconds between updates)
         self.update_delay = float(os.environ.get('UPDATE_DELAY', '0.5'))
 
+        # Triggered search configuration
+        self.trigger_search_on_update = config.get('trigger_search_on_update', True)
+        self.search_cooldown_seconds = config.get('search_cooldown_seconds', 60)
+        self.min_search_interval_seconds = config.get('min_search_interval_seconds', 5)
+
+        # Search tracking
+        self.last_triggered_searches = {}  # {item_id: timestamp}
+        self.last_any_search = 0
+
     def _get(self, endpoint: str) -> dict:
         """Make GET request to Arr API."""
         url = f"{self.base_url}/api/v3/{endpoint}"
@@ -163,6 +173,66 @@ class ArrInstance:
         except requests.exceptions.RequestException as e:
             logger.error(f"[{self.name}] PUT request failed for {endpoint}: {e}")
             raise
+
+    def trigger_search_for_item(self, item_id: int, endpoint: str) -> bool:
+        """
+        Trigger automatic search for specific item after profile update.
+
+        Args:
+            item_id: The movie or series ID
+            endpoint: 'movie' or 'series'
+
+        Returns:
+            True if search was triggered, False if skipped
+        """
+        if not self.trigger_search_on_update:
+            return False
+
+        # Check per-item cooldown
+        if item_id in self.last_triggered_searches:
+            last_search = self.last_triggered_searches[item_id]
+            time_since = time.time() - last_search
+            if time_since < self.search_cooldown_seconds:
+                logger.debug(f"[{self.name}] Skipping search for {endpoint} {item_id} "
+                           f"(searched {time_since:.0f}s ago, cooldown: {self.search_cooldown_seconds}s)")
+                return False
+
+        # Check global search rate limit
+        time_since_any = time.time() - self.last_any_search
+        if time_since_any < self.min_search_interval_seconds:
+            wait_time = self.min_search_interval_seconds - time_since_any
+            logger.debug(f"[{self.name}] Waiting {wait_time:.1f}s for search rate limit...")
+            time.sleep(wait_time)
+
+        # Build search command
+        if endpoint == 'movie':
+            command = {
+                'name': 'MoviesSearch',
+                'movieIds': [item_id]
+            }
+        else:  # series
+            command = {
+                'name': 'SeriesSearch',
+                'seriesId': item_id
+            }
+
+        # Execute search
+        if self.dry_run:
+            logger.info(f"[{self.name}] [DRY-RUN] Would trigger search: {command}")
+            return False
+
+        try:
+            self._post('command', command)
+            logger.info(f"[{self.name}] ✓ Triggered search for {endpoint} ID {item_id}")
+
+            # Update tracking
+            self.last_triggered_searches[item_id] = time.time()
+            self.last_any_search = time.time()
+
+            return True
+        except Exception as e:
+            logger.warning(f"[{self.name}] Failed to trigger search for {endpoint} {item_id}: {e}")
+            return False
 
     def test_connection(self) -> bool:
         """Test API connection."""
@@ -387,10 +457,14 @@ class ArrInstance:
                 needs_update = True
                 changes.append(f"remove tag '{self.tag_name}'")
 
+        # Track if profile was changed
+        profile_changed = False
+
         # Update profile if needed
         if current_profile_id != target_profile_id:
             new_profile_id = target_profile_id
             needs_update = True
+            profile_changed = True
             changes.append(f"set profile to '{target_profile_name}'")
 
         if needs_update:
@@ -413,6 +487,12 @@ class ArrInstance:
                     # Rate limiting
                     if self.update_delay > 0:
                         time.sleep(self.update_delay)
+
+                    # Trigger search if profile was changed
+                    if profile_changed:
+                        logger.debug(f"[{self.name}] Profile updated for '{title}', checking if search should be triggered...")
+                        time.sleep(1)  # Brief delay to ensure update is processed
+                        self.trigger_search_for_item(item_id, endpoint)
 
                     return True
                 except Exception as e:
@@ -499,9 +579,11 @@ class ArrLanguageTagger:
         self.config = self.load_config()
         self.validate_config()
         self.instances = []
+        self.overseerr_instances = []
 
         # Initialize instances
         self.init_instances()
+        self.init_overseerr()
 
     def load_config(self) -> dict:
         """Load configuration from YAML file."""
@@ -602,6 +684,33 @@ class ArrLanguageTagger:
         if not self.instances:
             logger.warning("No enabled instances found in configuration!")
 
+    def init_overseerr(self) -> None:
+        """Initialize Overseerr instances from config (optional)."""
+        if 'overseerr' not in self.config:
+            logger.info("Overseerr integration disabled (not in config)")
+            return
+
+        for name, config in self.config['overseerr'].items():
+            if not config.get('enabled', True):
+                logger.info(f"Skipping disabled Overseerr instance: {name}")
+                continue
+
+            # Override with environment variables if available
+            config = config.copy()  # Don't modify original config
+            config['api_key'] = self.get_env_override('overseerr', name, 'api_key', config.get('api_key'))
+            config['base_url'] = self.get_env_override('overseerr', name, 'base_url', config.get('base_url'))
+
+            try:
+                logger.info(f"Initializing Overseerr instance: {name}")
+                instance = OverseerrInstance(name, config, self.instances)
+                self.overseerr_instances.append(instance)
+            except ValueError as e:
+                logger.error(f"Failed to initialize Overseerr instance '{name}': {e}")
+                sys.exit(1)
+
+        if self.overseerr_instances:
+            logger.info(f"Initialized {len(self.overseerr_instances)} Overseerr instance(s)")
+
     def run_once(self) -> None:
         """Run processing once for all instances."""
         logger.info("="*80)
@@ -611,6 +720,14 @@ class ArrLanguageTagger:
             logger.info("DRY-RUN MODE ENABLED: No changes will be made")
         logger.info("="*80)
 
+        # Process Overseerr requests first (if enabled)
+        for overseerr in self.overseerr_instances:
+            try:
+                overseerr.process_pending_requests()
+            except Exception as e:
+                logger.error(f"Error processing Overseerr '{overseerr.name}': {e}", exc_info=True)
+
+        # Then process Arr instances (safety net)
         success_count = 0
         failure_count = 0
 
