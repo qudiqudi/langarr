@@ -11,36 +11,35 @@ schedule:
   run_on_startup: true
 
 # Optional Webhook Server (for real-time Overseerr MEDIA_PENDING events)
-# Uncomment to enable
-#webhook:
-#  enabled: true
-#  port: 5678                # Port to listen on (default: 5678)
-#  auth_token: ""            # Optional: require token in X-Auth-Token header
+webhook:
+  enabled: false            # Set to true to enable webhook server
+  port: 5678                # Port to listen on (default: 5678)
+  auth_token: ""            # Optional: require token in X-Auth-Token header
 
-# Overseerr Integration (OPTIONAL)
+# Overseerr Integration (OPTIONAL - remove this section to disable)
 # Automatically sets correct quality profiles on Overseerr requests
 # BEFORE they are sent to Radarr/Sonarr
-# Uncomment and configure to enable
-#overseerr:
-#  main:                     # Instance name
-#    enabled: true
-#
-#    # Connection details (loaded from env vars if not specified)
-#    # Requires: OVERSEERR_URL and OVERSEERR_API_KEY environment variables
-#
-#    # Map Overseerr server IDs to langarr instance names
-#    # To find server IDs: Overseerr → Settings → Services → click server → check URL
-#    # Example: /settings/services/radarr/1 ← server ID is 1
-#    radarr_servers:
-#      1: main               # Overseerr Radarr server ID 1 → langarr radarr.main
-#      # 2: 4k               # Example: Multiple servers
-#
-#    sonarr_servers:
-#      1: main               # Overseerr Sonarr server ID 1 → langarr sonarr.main
-#      # 2: 4k               # Example: Multiple servers
-#
-#    # Polling interval for pending requests (only used if webhook.enabled = false)
-#    poll_interval_minutes: 10
+overseerr:
+  main:                     # Instance name
+    enabled: true           # Set to false to disable
+
+    # Connection details (loaded from env vars if not specified)
+    # base_url: loaded from OVERSEERR_URL env var
+    # api_key: loaded from OVERSEERR_API_KEY env var
+
+    # Map Overseerr server IDs to langarr instance names
+    # To find server IDs: Overseerr → Settings → Services → click server → check URL
+    # Example: /settings/services/radarr/1 ← server ID is 1
+    radarr_servers:
+      1: main               # Overseerr Radarr server ID 1 → langarr radarr.main
+      # 2: 4k               # Example: Multiple servers
+
+    sonarr_servers:
+      1: main               # Overseerr Sonarr server ID 1 → langarr sonarr.main
+      # 2: 4k               # Example: Multiple servers
+
+    # Polling interval for pending requests (only used if webhook.enabled = false)
+    poll_interval_minutes: 10
 
 radarr:
   main:
