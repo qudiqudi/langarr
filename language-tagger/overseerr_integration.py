@@ -115,6 +115,12 @@ class OverseerrInstance:
             return response.json()
         except requests.exceptions.RequestException as e:
             logger.error(f"[{self.name}] PUT request failed for {endpoint}: {e}")
+            if hasattr(e, 'response') and e.response is not None:
+                try:
+                    error_body = e.response.json()
+                    logger.error(f"[{self.name}] Error response: {error_body}")
+                except:
+                    logger.error(f"[{self.name}] Error response body: {e.response.text[:500]}")
             raise
 
     def test_connection(self) -> bool:
