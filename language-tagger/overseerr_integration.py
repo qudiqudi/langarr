@@ -227,13 +227,14 @@ class OverseerrInstance:
 
         return profile_name
 
-    def update_request_profile(self, request_id: int, profile_id: int, media_type: str) -> bool:
+    def update_request_profile(self, request_id: int, profile_id: int, media_type: str, seasons: list = None) -> bool:
         """Update a request's profileId via PUT API.
 
         Args:
             request_id: The request ID to update
             profile_id: The new profile ID
             media_type: 'movie' or 'tv'
+            seasons: List of season numbers (required for TV shows)
         """
         try:
             if self.dry_run:
@@ -241,10 +242,16 @@ class OverseerrInstance:
                 return True
 
             # Seerr/Overseerr requires mediaType in the PUT body
-            self._put(f"request/{request_id}", {
+            # For TV shows, seasons field is also required
+            body = {
                 'mediaType': media_type,
                 'profileId': profile_id
-            })
+            }
+
+            if media_type == 'tv' and seasons is not None:
+                body['seasons'] = seasons
+
+            self._put(f"request/{request_id}", body)
             logger.info(f"[{self.name}] ✓ Updated request {request_id} → profileId {profile_id}")
             time.sleep(self.update_delay)
             return True
@@ -317,7 +324,10 @@ class OverseerrInstance:
         media_title = media.get('title', 'Unknown')
         logger.info(f"[{self.name}] Request {request_id} ('{media_title}'): {original_language} → {correct_profile_name}")
 
-        return self.update_request_profile(request_id, profile_id, media_type)
+        # For TV shows, get the seasons from the request
+        seasons = request.get('seasons') if media_type == 'tv' else None
+
+        return self.update_request_profile(request_id, profile_id, media_type, seasons)
 
     def process_pending_requests(self):
         """Process all pending requests and update profileId."""
