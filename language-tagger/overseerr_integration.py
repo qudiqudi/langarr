@@ -251,20 +251,27 @@ class OverseerrInstance:
 
         logger.info(f"[{self.name}] Processing request {request_id}: '{media_title}' (type={request.get('type')}, serverId={server_id})")
 
-        if not server_id:
-            logger.info(f"[{self.name}] Request {request_id} has no serverId, skipping")
-            return False
-
         # Get the appropriate ArrInstance mapping
         if media_type == 'movie':
-            arr_instance = self.radarr_mapping.get(server_id)
             service_type = 'radarr'
+            mapping = self.radarr_mapping
         else:
-            arr_instance = self.sonarr_mapping.get(server_id)
             service_type = 'sonarr'
+            mapping = self.sonarr_mapping
+
+        # If no serverId, use the first (default) server in the mapping
+        if not server_id:
+            if not mapping:
+                logger.info(f"[{self.name}] Request {request_id} has no serverId and no {service_type} servers configured")
+                return False
+            # Use the first server as default
+            server_id = list(mapping.keys())[0]
+            logger.info(f"[{self.name}] Request {request_id} has no serverId, using default {service_type} server {server_id}")
+
+        arr_instance = mapping.get(server_id)
 
         if not arr_instance:
-            logger.info(f"[{self.name}] Request {request_id}: No mapping for {service_type} server {server_id} (available: {list(self.radarr_mapping.keys() if media_type == 'movie' else self.sonarr_mapping.keys())})")
+            logger.info(f"[{self.name}] Request {request_id}: No mapping for {service_type} server {server_id} (available: {list(mapping.keys())})")
             return False
 
         # Get original language from Overseerr
