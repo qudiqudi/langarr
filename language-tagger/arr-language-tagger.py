@@ -447,10 +447,20 @@ class ArrInstance:
         # If we have a language mapping, use it; otherwise fall back to direct comparison
         if self.language_id_map:
             # If language ID is in our mapped set, it's an "original" language
-            return original_lang not in self.language_id_map
-        else:
-            # Fallback: direct comparison (for backward compatibility)
-            return original_lang not in self.original_languages
+            if original_lang in self.language_id_map:
+                return False  # It's an original language, don't prefer dub
+
+        # Fallback: direct comparison with configured language codes
+        # This handles webhook scenarios where we get ISO codes like 'en', 'ko'
+        # Convert to string and lowercase for comparison
+        original_lang_str = str(original_lang).lower().strip()
+        for config_lang in self.original_languages:
+            config_str = str(config_lang).lower().strip()
+            if original_lang_str == config_str:
+                return False  # It's an original language, don't prefer dub
+
+        # Not in original languages, prefer dub
+        return True
 
     def update_item(self, item: Dict, add_tag: bool) -> bool:
         """Update item with appropriate tag and quality profile."""
