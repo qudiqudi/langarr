@@ -10,12 +10,12 @@ schedule:
   interval_hours: 24
   run_on_startup: true
 
-# Optional Webhook Server (for real-time Overseerr MEDIA_PENDING events)
-# Uncomment to enable
-#webhook:
-#  enabled: true
-#  port: 5678                # Port to listen on (default: 5678)
-#  auth_token: ""            # Optional: require token in X-Auth-Token header
+# Optional Webhook Server (for real-time Seerr/Overseerr webhook events)
+# Recommended for auto-approve users to update profiles instantly
+webhook:
+  enabled: true
+  port: 5678                # Port to listen on (default: 5678)
+  auth_token: ""            # Optional: require token in X-Auth-Token header
 
 # Overseerr Integration (OPTIONAL)
 # Automatically sets correct quality profiles on Overseerr requests

@@ -25,6 +25,7 @@ import fcntl
 from typing import List, Dict, Optional
 from pathlib import Path
 from overseerr_integration import OverseerrInstance
+from webhook_server import WebhookServer
 
 # Configure logging
 logging.basicConfig(
@@ -391,6 +392,38 @@ class ArrInstance:
         logger.info(f"[{self.name}] Found {len(items)} {endpoint}")
         return items
 
+    def find_item_by_tmdb_id(self, tmdb_id: int) -> Optional[Dict]:
+        """
+        Find a movie or series by TMDB ID.
+
+        Args:
+            tmdb_id: The TMDB ID to search for
+
+        Returns:
+            Item dict if found, None otherwise
+        """
+        try:
+            endpoint = "movie" if self.service_type == "radarr" else "series"
+            items = self._get(endpoint)
+
+            for item in items:
+                if self.service_type == "radarr":
+                    # Radarr uses tmdbId
+                    if item.get('tmdbId') == tmdb_id:
+                        return item
+                else:
+                    # Sonarr uses tvdbId primarily, but also has tmdbId in some versions
+                    # Check both to be safe
+                    if item.get('tmdbId') == tmdb_id:
+                        return item
+
+            logger.debug(f"[{self.name}] No {endpoint} found with TMDB ID {tmdb_id}")
+            return None
+
+        except Exception as e:
+            logger.error(f"[{self.name}] Error finding item by TMDB ID {tmdb_id}: {e}")
+            return None
+
     def should_prefer_dub(self, item: Dict) -> bool:
         """Determine if item should prefer dubbed audio based on original language."""
         original_lang_obj = item.get('originalLanguage')
@@ -580,10 +613,12 @@ class ArrLanguageTagger:
         self.validate_config()
         self.instances = []
         self.overseerr_instances = []
+        self.webhook_server = None
 
         # Initialize instances
         self.init_instances()
         self.init_overseerr()
+        self.init_webhook()
 
     def load_config(self) -> dict:
         """Load configuration from YAML file."""
@@ -711,6 +746,32 @@ class ArrLanguageTagger:
         if self.overseerr_instances:
             logger.info(f"Initialized {len(self.overseerr_instances)} Overseerr instance(s)")
 
+    def init_webhook(self) -> None:
+        """Initialize webhook server from config (optional)."""
+        if 'webhook' not in self.config:
+            logger.info("Webhook server disabled (not in config)")
+            return
+
+        webhook_config = self.config['webhook']
+        if not webhook_config.get('enabled', False):
+            logger.info("Webhook server disabled (enabled=false)")
+            return
+
+        port = webhook_config.get('port', 5678)
+        auth_token = webhook_config.get('auth_token', None)
+
+        try:
+            logger.info(f"Initializing webhook server on port {port}")
+            self.webhook_server = WebhookServer(
+                port=port,
+                auth_token=auth_token,
+                overseerr_instances=self.overseerr_instances,
+                arr_instances=self.instances
+            )
+        except Exception as e:
+            logger.error(f"Failed to initialize webhook server: {e}")
+            sys.exit(1)
+
     def run_once(self) -> None:
         """Run processing once for all instances."""
         logger.info("="*80)
@@ -748,6 +809,10 @@ class ArrLanguageTagger:
         run_on_startup = schedule_config.get('run_on_startup', True)
 
         logger.info(f"Scheduling sync every {interval_hours} hours")
+
+        # Start webhook server if configured
+        if self.webhook_server:
+            self.webhook_server.start()
 
         # Schedule the job
         schedule.every(interval_hours).hours.do(self.run_once)

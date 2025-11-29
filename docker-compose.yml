@@ -23,6 +23,8 @@ services:
       - no-new-privileges:true
     depends_on:
       - recyclarr  # Your existing recyclarr service
+    ports:
+      - "5678:5678"  # Webhook server port (for Seerr/Overseerr webhooks)
     environment:
       # Script configuration
       - RUN_MODE=schedule
