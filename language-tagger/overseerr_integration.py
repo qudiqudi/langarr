@@ -267,8 +267,12 @@ class OverseerrInstance:
         media_title = media.get('title', 'Unknown')
 
         # Determine media type
+        # Seerr uses string 'movie' or 'tv', Overseerr uses integer 1 or 2
         request_type = request.get('type')
-        media_type = 'movie' if request_type == 1 else 'tv'
+        if request_type == 1 or request_type == 'movie':
+            media_type = 'movie'
+        else:
+            media_type = 'tv'
 
         # Get request's server ID
         server_id = request.get('serverId')
