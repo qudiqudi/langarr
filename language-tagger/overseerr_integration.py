@@ -324,8 +324,16 @@ class OverseerrInstance:
         media_title = media.get('title', 'Unknown')
         logger.info(f"[{self.name}] Request {request_id} ('{media_title}'): {original_language} → {correct_profile_name}")
 
-        # For TV shows, get the seasons from the request
-        seasons = request.get('seasons') if media_type == 'tv' else None
+        # For TV shows, extract season numbers from the request
+        # The request contains season objects, but we only need the season numbers
+        seasons = None
+        if media_type == 'tv':
+            season_objects = request.get('seasons', [])
+            if isinstance(season_objects, list):
+                # Extract just the season numbers
+                seasons = [s.get('seasonNumber') if isinstance(s, dict) else s for s in season_objects]
+                # Filter out None values
+                seasons = [s for s in seasons if s is not None]
 
         return self.update_request_profile(request_id, profile_id, media_type, seasons)
 
