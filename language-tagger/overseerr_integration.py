@@ -267,12 +267,13 @@ class OverseerrInstance:
         media_title = media.get('title', 'Unknown')
 
         # Determine media type
-        media_type = 'movie' if request.get('type') == 1 else 'tv'
+        request_type = request.get('type')
+        media_type = 'movie' if request_type == 1 else 'tv'
 
         # Get request's server ID
         server_id = request.get('serverId')
 
-        logger.info(f"[{self.name}] Processing request {request_id}: '{media_title}' (type={request.get('type')}, serverId={server_id})")
+        logger.info(f"[{self.name}] Processing request {request_id}: '{media_title}' (type={request_type}, media_type={media_type}, serverId={server_id})")
 
         # Get the appropriate ArrInstance mapping
         if media_type == 'movie':
