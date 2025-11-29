@@ -241,6 +241,7 @@ class OverseerrInstance:
         request_id = request.get('id')
         media = request.get('media', {})
         tmdb_id = media.get('tmdbId')
+        media_title = media.get('title', 'Unknown')
 
         # Determine media type
         media_type = 'movie' if request.get('type') == 1 else 'tv'
@@ -248,8 +249,10 @@ class OverseerrInstance:
         # Get request's server ID
         server_id = request.get('serverId')
 
+        logger.info(f"[{self.name}] Processing request {request_id}: '{media_title}' (type={request.get('type')}, serverId={server_id})")
+
         if not server_id:
-            logger.debug(f"[{self.name}] Request {request_id} has no serverId, skipping")
+            logger.info(f"[{self.name}] Request {request_id} has no serverId, skipping")
             return False
 
         # Get the appropriate ArrInstance mapping
@@ -261,7 +264,7 @@ class OverseerrInstance:
             service_type = 'sonarr'
 
         if not arr_instance:
-            logger.warning(f"[{self.name}] Request {request_id}: No mapping for {service_type} server {server_id}")
+            logger.info(f"[{self.name}] Request {request_id}: No mapping for {service_type} server {server_id} (available: {list(self.radarr_mapping.keys() if media_type == 'movie' else self.sonarr_mapping.keys())})")
             return False
 
         # Get original language from Overseerr
