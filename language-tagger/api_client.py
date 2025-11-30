@@ -50,8 +50,8 @@ class APIClient:
         url = f"{self.base_url}/{endpoint.lstrip('/')}"
 
         # Allow overriding default headers if needed
-        headers = kwargs.pop('headers', {})
-        if headers:
+        headers = kwargs.pop('headers', None)
+        if headers is not None:
             # Merge with session headers (explicit headers take precedence)
             merged_headers = self.session.headers.copy()
             merged_headers.update(headers)
@@ -101,7 +101,9 @@ class APIClient:
         Raises:
             requests.exceptions.RequestException: On any request failure
         """
-        return self._request('POST', endpoint, json=data, **kwargs)
+        if data is not None:
+            kwargs['json'] = data
+        return self._request('POST', endpoint, **kwargs)
 
     def _put(self, endpoint: str, data: Optional[Dict] = None, **kwargs) -> Any:
         """
@@ -118,7 +120,9 @@ class APIClient:
         Raises:
             requests.exceptions.RequestException: On any request failure
         """
-        return self._request('PUT', endpoint, json=data, **kwargs)
+        if data is not None:
+            kwargs['json'] = data
+        return self._request('PUT', endpoint, **kwargs)
 
     def _delete(self, endpoint: str, **kwargs) -> Any:
         """
