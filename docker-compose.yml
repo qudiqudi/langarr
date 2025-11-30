@@ -15,7 +15,7 @@ version: '3.8'
 
 services:
   langarr-tagger:
-    build: /path/to/langarr/language-tagger  # CHANGE THIS: Point to where you cloned langarr
+    image: ghcr.io/qudiqudi/langarr:latest
     container_name: langarr-tagger
     read_only: true
     tmpfs: /tmp
@@ -46,7 +46,7 @@ services:
       # Optional: Testing (preview changes without applying)
       # - DRY_RUN=true
     volumes:
-      - /path/to/langarr/language-tagger:/config:ro  # CHANGE THIS: Point to langarr config
+      - ./langarr-config:/config:ro  # Your config directory
     networks:
       - t2_proxy  # CHANGE THIS: Use your network name
     restart: unless-stopped
