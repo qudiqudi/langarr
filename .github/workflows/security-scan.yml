@@ -98,13 +98,15 @@ jobs:
             fi
           done
 
-          # Check for common patterns in code
+          # Check for common patterns in code (exclude example files and documentation)
           echo ""
           echo "Checking for hardcoded secrets patterns..."
 
           if grep -r -i --include="*.py" --include="*.yml" --include="*.yaml" --include="*.js" --include="*.ts" \
             -E "(password|passwd|pwd|secret|token|api_key|apikey)\s*=\s*['\"][^'\"]{8,}" \
-            --exclude-dir=".git" --exclude-dir="node_modules" . ; then
+            --exclude-dir=".git" --exclude-dir="node_modules" . \
+            | grep -v ".example" \
+            | grep -v "your-secure-random-token-here" ; then
             echo "❌ FOUND POTENTIAL HARDCODED SECRETS"
             FOUND_ISSUES=1
           fi

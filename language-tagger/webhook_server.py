@@ -21,6 +21,9 @@ from threading import Thread
 
 logger = logging.getLogger(__name__)
 
+# Constants
+INSECURE_BYPASS_TOKEN = "INSECURE_BYPASS"  # Special token for testing mode (not a real secret)
+
 
 class WebhookServer:
     """Flask-based webhook server for Seerr/Overseerr notifications."""
@@ -54,7 +57,7 @@ class WebhookServer:
         # 1. Environment variable is explicitly set to true
         # 2. Token matches the bypass value
         allow_insecure = os.environ.get('ALLOW_INSECURE_WEBHOOK', 'false').lower() == 'true'
-        self.is_insecure_mode = (allow_insecure and auth_token == "INSECURE_BYPASS")
+        self.is_insecure_mode = (allow_insecure and auth_token == INSECURE_BYPASS_TOKEN)
         self.overseerr_instances = overseerr_instances
         self.arr_instances = arr_instances
 
