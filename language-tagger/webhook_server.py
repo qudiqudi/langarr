@@ -156,14 +156,10 @@ class WebhookServer:
                 logger.warning(f"Webhook request with empty payload from {get_remote_address()}")
                 return jsonify({'error': 'Empty payload'}), 400
 
-            # Debug: Log raw payload to diagnose Seerr compatibility issues
-            logger.info(f"Raw webhook payload from {get_remote_address()}: {json.dumps(payload, indent=2)}")
-
             # Validate payload structure
             is_valid, error_msg = self.validate_webhook_payload(payload)
             if not is_valid:
                 logger.warning(f"Webhook request with invalid payload from {get_remote_address()}: {error_msg}")
-                logger.warning(f"Failed payload structure: {json.dumps(payload, indent=2)}")
                 return jsonify({'error': error_msg}), 400
 
             notification_type = payload.get('notification_type')
