@@ -12,6 +12,7 @@ schedule:
 
 # Optional Webhook Server (for real-time Seerr/Overseerr webhook events)
 # Recommended for auto-approve users to update profiles instantly
+# NOTE: Disabled by default in this example - enable if using Overseerr auto-approve
 webhook:
   enabled: false            # Set to true to enable webhook server
   port: 5678                # Port to listen on (default: 5678)
@@ -31,7 +32,7 @@ overseerr:
     # Map Overseerr server IDs to langarr instance names
     # To find server IDs: Settings → Services → click server → check URL
     # Example: /settings/services/radarr/0 → ID is 0
-    # Note: Seerr uses 0-based IDs (starts at 0, not 1)
+    # Note: Some Seerr/Overseerr instances use ID 0 for the first/default server
     radarr_servers:
       0: main               # Overseerr Radarr server ID 0 → langarr radarr.main
       # 1: 4k               # Example: Multiple servers

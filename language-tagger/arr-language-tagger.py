@@ -255,23 +255,23 @@ class ArrInstance:
             # Case-insensitive comparison
             if profile['name'].lower() == self.original_profile_name.lower():
                 self.profile_ids['original'] = profile['id']
-                logger.info(f"[{self.name}] Found profile '{profile['name']}' (ID: {profile['id']})")
+                logger.info(f"[{self.name}] Found profile '{profile['name']}' → ID {profile['id']}")
             elif profile['name'].lower() == self.dub_profile_name.lower():
                 self.profile_ids['dub'] = profile['id']
-                logger.info(f"[{self.name}] Found profile '{profile['name']}' (ID: {profile['id']})")
+                logger.info(f"[{self.name}] Found profile '{profile['name']}' → ID {profile['id']}")
 
         if 'original' not in self.profile_ids:
             logger.error(f"[{self.name}] Quality profile '{self.original_profile_name}' not found!")
             logger.info(f"[{self.name}] Available profiles:")
             for profile in profiles:
-                logger.info(f"[{self.name}]   - {profile['name']} (ID: {profile['id']})")
+                logger.info(f"[{self.name}]   - {profile['name']} → ID {profile['id']}")
             raise ValueError(f"Required profile '{self.original_profile_name}' does not exist")
 
         if 'dub' not in self.profile_ids:
             logger.error(f"[{self.name}] Quality profile '{self.dub_profile_name}' not found!")
             logger.info(f"[{self.name}] Available profiles:")
             for profile in profiles:
-                logger.info(f"[{self.name}]   - {profile['name']} (ID: {profile['id']})")
+                logger.info(f"[{self.name}]   - {profile['name']} → ID {profile['id']}")
             raise ValueError(f"Required profile '{self.dub_profile_name}' does not exist")
 
     def build_language_mapping(self, items: List[Dict]) -> None:
@@ -371,7 +371,7 @@ class ArrInstance:
         for tag in tags:
             if tag['label'] == self.tag_name:
                 self.tag_id = tag['id']
-                logger.info(f"[{self.name}] Tag '{self.tag_name}' exists (ID: {self.tag_id})")
+                logger.info(f"[{self.name}] Tag '{self.tag_name}' exists → ID {self.tag_id}")
                 return
 
         # Create tag if it doesn't exist
@@ -382,7 +382,7 @@ class ArrInstance:
             logger.info(f"[{self.name}] Creating tag '{self.tag_name}'...")
             new_tag = self._post("tag", {"label": self.tag_name})
             self.tag_id = new_tag['id']
-            logger.info(f"[{self.name}] Created tag '{self.tag_name}' (ID: {self.tag_id})")
+            logger.info(f"[{self.name}] Created tag '{self.tag_name}' → ID {self.tag_id}")
 
     def get_all_items(self) -> List[Dict]:
         """Fetch all items (movies/series) from instance."""

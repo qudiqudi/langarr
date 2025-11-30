@@ -12,8 +12,9 @@ schedule:
 
 # Optional Webhook Server (for real-time Seerr/Overseerr webhook events)
 # Recommended for auto-approve users to update profiles instantly
+# NOTE: Enabled by default in this config for instant profile updates
 webhook:
-  enabled: true
+  enabled: true             # Set to false if you don't use Overseerr webhooks
   port: 5678                # Port to listen on (default: 5678)
   auth_token: ""            # Optional: require token in X-Auth-Token header
 
