@@ -27,10 +27,16 @@ Perfect for multilingual libraries where you want original audio for some langua
 ### 1. Add Langarr Service
 
 **Using pre-built image (recommended):**
+
+Choose your version:
+- `latest` - Stable releases (recommended for production)
+- `v1.0.0` - Specific version (pin for stability)
+- `develop` - Development builds (testing/bleeding edge)
+
 ```yaml
 services:
   langarr:
-    image: ghcr.io/qudiqudi/langarr:latest
+    image: ghcr.io/qudiqudi/langarr:latest  # or :v1.0.0 or :develop
     container_name: langarr
     ports:
       - "5678:5678"  # For webhook support
@@ -266,6 +272,21 @@ original_languages:
 ```
 
 **Share your config!** Submit a PR to help others.
+
+## Versioning
+
+Langarr follows [Semantic Versioning](https://semver.org/):
+
+- **Production:** Use `latest` tag or pin to specific version `v1.0.0`
+- **Testing:** Use `develop` tag for bleeding-edge features
+- **Releases:** Tagged as `v1.0.0`, `v1.1.0`, etc.
+
+**Docker image tags:**
+```yaml
+ghcr.io/qudiqudi/langarr:latest   # Latest stable release
+ghcr.io/qudiqudi/langarr:v1.0.0   # Specific version
+ghcr.io/qudiqudi/langarr:develop  # Development builds
+```
 
 ## Credits
 
