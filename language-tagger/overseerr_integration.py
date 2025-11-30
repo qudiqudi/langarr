@@ -17,35 +17,29 @@ import logging
 import requests
 import time
 from typing import List, Dict, Optional
+from api_client import APIClient
 
 logger = logging.getLogger(__name__)
 
 
-class OverseerrInstance:
+class OverseerrInstance(APIClient):
     """Manages Overseerr API integration for profile assignment."""
 
     def __init__(self, name: str, config: dict, arr_instances: List):
         """Initialize Overseerr instance."""
-        self.name = name
-
         # Validate required fields
-        self.base_url = config.get('base_url') or os.environ.get('OVERSEERR_URL')
-        self.api_key = config.get('api_key') or os.environ.get('OVERSEERR_API_KEY')
+        base_url = config.get('base_url') or os.environ.get('OVERSEERR_URL')
+        api_key = config.get('api_key') or os.environ.get('OVERSEERR_API_KEY')
 
-        if not self.base_url:
+        if not base_url:
             raise ValueError(f"Overseerr '{name}': base_url not configured and OVERSEERR_URL env var not set")
-        if not self.api_key:
+        if not api_key:
             raise ValueError(f"Overseerr '{name}': api_key not configured and OVERSEERR_API_KEY env var not set")
 
-        self.base_url = self.base_url.rstrip('/')
-        self.enabled = config.get('enabled', True)
+        # Initialize parent APIClient
+        super().__init__(base_url, api_key, name)
 
-        # Session setup
-        self.session = requests.Session()
-        self.session.headers.update({
-            'X-Api-Key': self.api_key,
-            'Content-Type': 'application/json'
-        })
+        self.enabled = config.get('enabled', True)
 
         # Server mappings: {overseerr_server_id: ArrInstance}
         self.radarr_mapping = {}
@@ -96,32 +90,18 @@ class OverseerrInstance:
                 logger.warning(f"[{self.name}] Sonarr instance '{instance_name}' not found in arr_instances")
 
     def _get(self, endpoint: str, params: dict = None) -> dict:
-        """Make GET request to Overseerr API."""
-        url = f"{self.base_url}/api/v1/{endpoint}"
-        try:
-            response = self.session.get(url, params=params, timeout=30)
-            response.raise_for_status()
-            return response.json()
-        except requests.exceptions.RequestException as e:
-            logger.error(f"[{self.name}] GET request failed for {endpoint}: {e}")
-            raise
+        """Make GET request to Overseerr API (v1)."""
+        result = super()._get(f"api/v1/{endpoint}", params=params)
+        if result is None:
+            raise requests.exceptions.RequestException(f"GET request failed for {endpoint}")
+        return result
 
     def _put(self, endpoint: str, data: dict) -> dict:
-        """Make PUT request to Overseerr API."""
-        url = f"{self.base_url}/api/v1/{endpoint}"
-        try:
-            response = self.session.put(url, json=data, timeout=30)
-            response.raise_for_status()
-            return response.json()
-        except requests.exceptions.RequestException as e:
-            logger.error(f"[{self.name}] PUT request failed for {endpoint}: {e}")
-            if hasattr(e, 'response') and e.response is not None:
-                try:
-                    error_body = e.response.json()
-                    logger.error(f"[{self.name}] Error response: {error_body}")
-                except:
-                    logger.error(f"[{self.name}] Error response body: {e.response.text[:500]}")
-            raise
+        """Make PUT request to Overseerr API (v1)."""
+        result = super()._put(f"api/v1/{endpoint}", data)
+        if result is None:
+            raise requests.exceptions.RequestException(f"PUT request failed for {endpoint}")
+        return result
 
     def test_connection(self) -> bool:
         """Test API connection."""

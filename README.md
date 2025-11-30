@@ -221,7 +221,7 @@ User requests → Webhook fires → Langarr updates profile in Radarr
 
 ### Test with Dry-Run
 ```bash
-docker exec langarr env DRY_RUN=true python3 /app/arr-language-tagger.py
+docker exec langarr env DRY_RUN=true RUN_MODE=once python3 /app/arr-language-tagger.py
 ```
 
 ### Common Issues

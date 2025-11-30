@@ -19,10 +19,9 @@ from flask_limiter.util import get_remote_address
 from typing import Dict, Optional, List, Tuple
 from threading import Thread
 
-logger = logging.getLogger(__name__)
+from constants import INSECURE_BYPASS_TOKEN
 
-# Constants
-INSECURE_BYPASS_TOKEN = "INSECURE_BYPASS"  # Special token for testing mode (not a real secret)
+logger = logging.getLogger(__name__)
 
 
 class WebhookServer:
