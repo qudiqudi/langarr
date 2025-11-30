@@ -70,12 +70,13 @@ class APIClient:
             logger.error(f"[{self.name}] Request failed for {method} {endpoint}: {e}")
             raise
 
-    def _get(self, endpoint: str, **kwargs) -> Any:
+    def _get(self, endpoint: str, params: Optional[Dict] = None, **kwargs) -> Any:
         """
         Make GET request.
 
         Args:
             endpoint: API endpoint
+            params: Query parameters to include in the request
             **kwargs: Additional arguments to pass to requests
 
         Returns:
@@ -84,6 +85,8 @@ class APIClient:
         Raises:
             requests.exceptions.RequestException: On any request failure
         """
+        if params is not None:
+            kwargs['params'] = params
         return self._request('GET', endpoint, **kwargs)
 
     def _post(self, endpoint: str, data: Optional[Dict] = None, **kwargs) -> Any:
