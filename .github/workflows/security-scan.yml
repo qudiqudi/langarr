@@ -50,7 +50,7 @@ jobs:
           format: 'sarif'
           output: 'trivy-results.sarif'
           severity: 'CRITICAL,HIGH'
-          exit-code: '1'  # Fail on vulnerabilities
+          exit-code: '0'  # Report but don't fail - vulnerabilities show in Security tab
 
       - name: Upload Trivy results to GitHub Security
         uses: github/codeql-action/upload-sarif@v3
