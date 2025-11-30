@@ -10,6 +10,13 @@ schedule:
   interval_hours: 24        # Run every 24 hours
   run_on_startup: true      # Run immediately on container start
 
+# Optional Webhook Server (disabled for simple setup)
+# Enable if you want real-time profile updates via webhooks
+webhook:
+  enabled: false            # Set to true to enable webhook server
+  port: 5678                # Port to listen on (default: 5678)
+  auth_token: ""            # Optional: require token in X-Auth-Token header
+
 radarr:
   main:
     enabled: true
