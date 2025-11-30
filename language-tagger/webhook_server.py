@@ -12,6 +12,8 @@ import logging
 import json
 import time
 from flask import Flask, request, jsonify
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 from typing import Dict, Optional, List
 from threading import Thread
 
@@ -27,12 +29,26 @@ class WebhookServer:
 
         Args:
             port: Port to listen on
-            auth_token: Optional authentication token
+            auth_token: Authentication token (required for security)
             overseerr_instances: List of OverseerrInstance objects
             arr_instances: List of ArrInstance objects
+
+        Raises:
+            ValueError: If auth_token is not provided
         """
         self.port = port
+
+        # SECURITY: Enforce authentication token requirement
+        # Special case: "INSECURE_BYPASS" is allowed when ALLOW_INSECURE_WEBHOOK=true is set
+        if not auth_token or not auth_token.strip():
+            raise ValueError(
+                "Webhook authentication token is required for security. "
+                "Set 'webhook.auth_token' in config.yml to a secure random string. "
+                "To disable this check (NOT RECOMMENDED for production), set ALLOW_INSECURE_WEBHOOK=true"
+            )
+
         self.auth_token = auth_token
+        self.is_insecure_mode = (auth_token == "INSECURE_BYPASS")
         self.overseerr_instances = overseerr_instances
         self.arr_instances = arr_instances
 
@@ -40,6 +56,17 @@ class WebhookServer:
         self.app = Flask(__name__)
         self.app.add_url_rule('/webhook', 'webhook', self.handle_webhook, methods=['POST'])
         self.app.add_url_rule('/health', 'health', self.health_check, methods=['GET'])
+
+        # Add rate limiting to prevent abuse
+        self.limiter = Limiter(
+            get_remote_address,
+            app=self.app,
+            default_limits=["200 per day", "50 per hour"],
+            storage_uri="memory://"
+        )
+
+        # Apply stricter rate limit to webhook endpoint
+        self.limiter.limit("20 per minute")(self.handle_webhook)
 
         # Disable Flask's default logger output
         log = logging.getLogger('werkzeug')
@@ -51,21 +78,70 @@ class WebhookServer:
         """Health check endpoint."""
         return jsonify({'status': 'healthy'}), 200
 
+    def validate_webhook_payload(self, payload: Dict) -> tuple[bool, Optional[str]]:
+        """
+        Validate webhook payload structure and required fields.
+
+        Args:
+            payload: The webhook payload to validate
+
+        Returns:
+            Tuple of (is_valid, error_message)
+        """
+        if not isinstance(payload, dict):
+            return False, "Payload must be a JSON object"
+
+        # Validate notification_type exists and is a string
+        notification_type = payload.get('notification_type')
+        if not notification_type or not isinstance(notification_type, str):
+            return False, "Missing or invalid 'notification_type' field"
+
+        # For media notifications, validate required fields
+        if notification_type in ['MEDIA_PENDING', 'MEDIA_AUTO_APPROVED']:
+            media = payload.get('media')
+            if not isinstance(media, dict):
+                return False, "Missing or invalid 'media' field"
+
+            tmdb_id = media.get('tmdbId')
+            if not isinstance(tmdb_id, int) or tmdb_id <= 0:
+                return False, "Missing or invalid 'media.tmdbId' field (must be positive integer)"
+
+            media_type = media.get('media_type')
+            if media_type not in ['movie', 'tv']:
+                return False, "Invalid 'media.media_type' field (must be 'movie' or 'tv')"
+
+        return True, None
+
     def handle_webhook(self):
         """Handle incoming webhook from Seerr/Overseerr."""
         try:
-            # Verify auth token if configured
-            if self.auth_token:
+            # Verify auth token (unless in insecure mode)
+            if not self.is_insecure_mode:
                 provided_token = request.headers.get('X-Auth-Token')
+                if not provided_token:
+                    logger.warning(f"Webhook request from {get_remote_address()} without auth token")
+                    return jsonify({'error': 'Unauthorized - X-Auth-Token header required'}), 401
+
                 if provided_token != self.auth_token:
-                    logger.warning("Webhook request with invalid auth token")
-                    return jsonify({'error': 'Unauthorized'}), 401
+                    logger.warning(f"Webhook request from {get_remote_address()} with invalid auth token")
+                    return jsonify({'error': 'Unauthorized - Invalid token'}), 401
 
             # Parse webhook payload
-            payload = request.json
+            try:
+                payload = request.get_json(force=True)
+            except Exception as e:
+                logger.warning(f"Webhook request with invalid JSON from {get_remote_address()}: {e}")
+                return jsonify({'error': 'Invalid JSON payload'}), 400
+
             if not payload:
-                logger.warning("Webhook request with empty payload")
+                logger.warning(f"Webhook request with empty payload from {get_remote_address()}")
                 return jsonify({'error': 'Empty payload'}), 400
+
+            # Validate payload structure
+            is_valid, error_msg = self.validate_webhook_payload(payload)
+            if not is_valid:
+                logger.warning(f"Webhook request with invalid payload from {get_remote_address()}: {error_msg}")
+                return jsonify({'error': error_msg}), 400
 
             notification_type = payload.get('notification_type')
             logger.info(f"Received webhook: {notification_type}")
@@ -81,7 +157,7 @@ class WebhookServer:
 
         except Exception as e:
             logger.error(f"Error processing webhook: {e}", exc_info=True)
-            return jsonify({'error': str(e)}), 500
+            return jsonify({'error': 'Internal server error'}), 500
 
     def process_media_request(self, payload: Dict):
         """
@@ -160,7 +236,7 @@ class WebhookServer:
                     continue
 
                 item_id = item.get('id')
-                current_title = item.get('title') or item.get('titleSlug', 'Unknown')
+                current_title = item.get('title') or item.get('titleSlug') or 'Unknown'
 
                 logger.info(f"[{arr.name}] Found {media_type} '{current_title}' (ID {item_id})")
 
