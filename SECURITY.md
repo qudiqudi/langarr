@@ -38,6 +38,31 @@ We will respond to security reports within 48 hours and work to release a fix as
 - Recyclarr: Official image from [ghcr.io/recyclarr/recyclarr](https://github.com/recyclarr/recyclarr)
 - Python dependencies: Specified in `requirements.txt`
 
+## Automated Security Checks
+
+This repository uses automated security scanning on all pull requests and commits:
+
+### Secret Scanning (Gitleaks)
+- Scans for accidentally committed API keys, tokens, passwords
+- Runs on every PR and push
+- Blocks merging if secrets are detected
+
+### Dependency Scanning (Trivy)
+- Scans Python dependencies for known vulnerabilities
+- Checks Docker images for security issues
+- Reports CRITICAL and HIGH severity issues
+
+### File Pattern Checks
+- Prevents committing sensitive files (`.env`, `*.key`, `*.pem`, etc.)
+- Detects hardcoded secrets in code
+- Validates no credentials in configuration files
+
+**If security checks fail:**
+1. Review the workflow logs in GitHub Actions
+2. Remove any flagged secrets or sensitive files
+3. Use environment variables instead of hardcoded values
+4. Add legitimate false positives to `.gitleaksignore`
+
 ## Best Practices
 
 1. Keep Docker images updated
@@ -45,3 +70,5 @@ We will respond to security reports within 48 hours and work to release a fix as
 3. Restrict network access to trusted containers only
 4. Monitor logs for suspicious activity
 5. Follow principle of least privilege for PUID/PGID
+6. Never commit real credentials - use `.env` files (gitignored)
+7. Rotate any accidentally exposed credentials immediately

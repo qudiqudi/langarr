@@ -37,6 +37,9 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Constants
+INSECURE_BYPASS_TOKEN = "INSECURE_BYPASS"  # Special token for testing mode (not a real secret)
+
 
 class ProcessLock:
     """File-based lock to prevent concurrent execution."""
@@ -778,7 +781,7 @@ class ArrLanguageTagger:
             logger.warning("This is a SECURITY RISK and should only be used for testing.")
             logger.warning("Set 'webhook.auth_token' in config.yml for production use.")
             logger.warning("="*80)
-            auth_token = "INSECURE_BYPASS"  # Dummy token to bypass validation
+            auth_token = INSECURE_BYPASS_TOKEN  # Use constant for testing bypass
 
         try:
             logger.info(f"Initializing webhook server on port {port}")
