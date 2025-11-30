@@ -51,7 +51,7 @@ image: ghcr.io/qudiqudi/langarr:develop
 
 **Dry-run mode** (preview changes without applying):
 ```bash
-docker exec langarr env DRY_RUN=true python3 /app/arr-language-tagger.py
+docker exec langarr env DRY_RUN=true RUN_MODE=once python3 /app/arr-language-tagger.py
 ```
 
 **Run once** (without scheduler):

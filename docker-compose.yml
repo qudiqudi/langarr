@@ -48,7 +48,7 @@ services:
     volumes:
       - ./langarr-config:/config:ro  # Your config directory
     networks:
-      - t2_proxy  # CHANGE THIS: Use your network name
+      - ${DOCKER_NETWORK:-media-stack}  # Uses DOCKER_NETWORK env var or defaults to media-stack
     restart: unless-stopped
     logging:
       driver: json-file

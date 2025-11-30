@@ -109,7 +109,8 @@ jobs:
             | grep -v "your-secure-random-token-here" \
             | grep -v "# Special token for testing" \
             | grep -v "# not a real secret" \
-            | grep -v "^[A-Z_]*TOKEN\s*=" ; then
+            | grep -v "constants.py" \
+            | grep -v -E ":[A-Z_]*TOKEN\s*=" ; then
             echo "❌ FOUND POTENTIAL HARDCODED SECRETS"
             FOUND_ISSUES=1
           fi

@@ -1,8 +1,7 @@
 # Gitleaks ignore file for known false positives
 
 # Example config files with placeholder values
-language-tagger/config.example-simple.yml:*
-language-tagger/config.example-with-overseerr.yml:*
+language-tagger/config.example.yml:*
 .env.example:*
 
 # Documentation files that reference tokens/keys as examples

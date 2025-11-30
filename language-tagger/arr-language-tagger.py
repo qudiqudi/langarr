@@ -26,6 +26,8 @@ from typing import List, Dict, Optional
 from pathlib import Path
 from overseerr_integration import OverseerrInstance
 from webhook_server import WebhookServer
+from constants import INSECURE_BYPASS_TOKEN
+from api_client import APIClient
 
 # Configure logging
 logging.basicConfig(
@@ -36,9 +38,6 @@ logging.basicConfig(
     ]
 )
 logger = logging.getLogger(__name__)
-
-# Constants
-INSECURE_BYPASS_TOKEN = "INSECURE_BYPASS"  # Special token for testing mode (not a real secret)
 
 
 class ProcessLock:
@@ -93,31 +92,25 @@ class ProcessLock:
         self.release()
 
 
-class ArrInstance:
+class ArrInstance(APIClient):
     """Base class for Sonarr/Radarr instance management."""
 
     def __init__(self, name: str, service_type: str, config: dict):
         """Initialize Arr instance."""
-        self.name = name
-        self.service_type = service_type  # 'radarr' or 'sonarr'
-
         # Validate required fields
-        self.base_url = config.get('base_url')
-        self.api_key = config.get('api_key')
+        base_url = config.get('base_url')
+        api_key = config.get('api_key')
 
-        if not self.base_url:
+        if not base_url:
             raise ValueError(f"Instance '{name}': base_url is required")
-        if not self.api_key:
+        if not api_key:
             raise ValueError(f"Instance '{name}': api_key is required")
 
-        self.base_url = self.base_url.rstrip('/')
-        self.enabled = config.get('enabled', True)
+        # Initialize parent APIClient
+        super().__init__(base_url, api_key, name)
 
-        self.session = requests.Session()
-        self.session.headers.update({
-            'X-Api-Key': self.api_key,
-            'Content-Type': 'application/json'
-        })
+        self.service_type = service_type  # 'radarr' or 'sonarr'
+        self.enabled = config.get('enabled', True)
 
         # Tag and profile configuration
         self.tag_name = config.get('tag_name', 'prefer-dub')
@@ -145,38 +138,17 @@ class ArrInstance:
         self.last_triggered_searches = {}  # {item_id: timestamp}
         self.last_any_search = 0
 
-    def _get(self, endpoint: str) -> dict:
-        """Make GET request to Arr API."""
-        url = f"{self.base_url}/api/v3/{endpoint}"
-        try:
-            response = self.session.get(url, timeout=30)
-            response.raise_for_status()
-            return response.json()
-        except requests.exceptions.RequestException as e:
-            logger.error(f"[{self.name}] GET request failed for {endpoint}: {e}")
-            raise
+    def _get(self, endpoint: str, params: Optional[Dict] = None, **kwargs) -> dict:
+        """Make GET request to Arr API (v3)."""
+        return super()._get(f"api/v3/{endpoint}", params, **kwargs)
 
-    def _post(self, endpoint: str, data: dict) -> dict:
-        """Make POST request to Arr API."""
-        url = f"{self.base_url}/api/v3/{endpoint}"
-        try:
-            response = self.session.post(url, json=data, timeout=30)
-            response.raise_for_status()
-            return response.json()
-        except requests.exceptions.RequestException as e:
-            logger.error(f"[{self.name}] POST request failed for {endpoint}: {e}")
-            raise
+    def _post(self, endpoint: str, data: Optional[Dict] = None, **kwargs) -> dict:
+        """Make POST request to Arr API (v3)."""
+        return super()._post(f"api/v3/{endpoint}", data, **kwargs)
 
-    def _put(self, endpoint: str, data: dict) -> dict:
-        """Make PUT request to Arr API."""
-        url = f"{self.base_url}/api/v3/{endpoint}"
-        try:
-            response = self.session.put(url, json=data, timeout=30)
-            response.raise_for_status()
-            return response.json()
-        except requests.exceptions.RequestException as e:
-            logger.error(f"[{self.name}] PUT request failed for {endpoint}: {e}")
-            raise
+    def _put(self, endpoint: str, data: Optional[Dict] = None, **kwargs) -> dict:
+        """Make PUT request to Arr API (v3)."""
+        return super()._put(f"api/v3/{endpoint}", data, **kwargs)
 
     def trigger_search_for_item(self, item_id: int, endpoint: str) -> bool:
         """
