@@ -89,19 +89,13 @@ class OverseerrInstance(APIClient):
             else:
                 logger.warning(f"[{self.name}] Sonarr instance '{instance_name}' not found in arr_instances")
 
-    def _get(self, endpoint: str, params: dict = None) -> dict:
+    def _get(self, endpoint: str, **kwargs) -> dict:
         """Make GET request to Overseerr API (v1)."""
-        result = super()._get(f"api/v1/{endpoint}", params=params)
-        if result is None:
-            raise requests.exceptions.RequestException(f"GET request failed for {endpoint}")
-        return result
+        return super()._get(f"api/v1/{endpoint}", **kwargs)
 
-    def _put(self, endpoint: str, data: dict) -> dict:
+    def _put(self, endpoint: str, data: dict, **kwargs) -> dict:
         """Make PUT request to Overseerr API (v1)."""
-        result = super()._put(f"api/v1/{endpoint}", data)
-        if result is None:
-            raise requests.exceptions.RequestException(f"PUT request failed for {endpoint}")
-        return result
+        return super()._put(f"api/v1/{endpoint}", data, **kwargs)
 
     def test_connection(self) -> bool:
         """Test API connection."""

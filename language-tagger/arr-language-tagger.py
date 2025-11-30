@@ -138,26 +138,17 @@ class ArrInstance(APIClient):
         self.last_triggered_searches = {}  # {item_id: timestamp}
         self.last_any_search = 0
 
-    def _get(self, endpoint: str) -> dict:
+    def _get(self, endpoint: str, **kwargs) -> dict:
         """Make GET request to Arr API (v3)."""
-        result = super()._get(f"api/v3/{endpoint}")
-        if result is None:
-            raise requests.exceptions.RequestException(f"GET request failed for {endpoint}")
-        return result
+        return super()._get(f"api/v3/{endpoint}", **kwargs)
 
-    def _post(self, endpoint: str, data: dict) -> dict:
+    def _post(self, endpoint: str, data: dict, **kwargs) -> dict:
         """Make POST request to Arr API (v3)."""
-        result = super()._post(f"api/v3/{endpoint}", data)
-        if result is None:
-            raise requests.exceptions.RequestException(f"POST request failed for {endpoint}")
-        return result
+        return super()._post(f"api/v3/{endpoint}", data, **kwargs)
 
-    def _put(self, endpoint: str, data: dict) -> dict:
+    def _put(self, endpoint: str, data: dict, **kwargs) -> dict:
         """Make PUT request to Arr API (v3)."""
-        result = super()._put(f"api/v3/{endpoint}", data)
-        if result is None:
-            raise requests.exceptions.RequestException(f"PUT request failed for {endpoint}")
-        return result
+        return super()._put(f"api/v3/{endpoint}", data, **kwargs)
 
     def trigger_search_for_item(self, item_id: int, endpoint: str) -> bool:
         """

@@ -25,7 +25,7 @@ class APIClient:
         self.api_key = api_key
         self.name = name
 
-    def _request(self, method: str, endpoint: str, **kwargs) -> Optional[Any]:
+    def _request(self, method: str, endpoint: str, **kwargs) -> Any:
         """
         Make HTTP request with common error handling.
 
@@ -35,11 +35,15 @@ class APIClient:
             **kwargs: Additional arguments to pass to requests
 
         Returns:
-            Response JSON if successful, None otherwise
+            Response JSON if successful
+
+        Raises:
+            requests.exceptions.RequestException: On any request failure
         """
         url = f"{self.base_url}/{endpoint.lstrip('/')}"
         headers = kwargs.pop('headers', {})
         headers['X-Api-Key'] = self.api_key
+        headers.setdefault('Content-Type', 'application/json')
 
         try:
             response = requests.request(method, url, headers=headers, timeout=30, **kwargs)
@@ -49,15 +53,12 @@ class APIClient:
             logger.error(f"[{self.name}] HTTP error for {method} {endpoint}: {e}")
             if e.response is not None:
                 logger.error(f"[{self.name}] Response: {e.response.text}")
-            return None
+            raise
         except requests.exceptions.RequestException as e:
             logger.error(f"[{self.name}] Request failed for {method} {endpoint}: {e}")
-            return None
-        except Exception as e:
-            logger.error(f"[{self.name}] Unexpected error for {method} {endpoint}: {e}")
-            return None
+            raise
 
-    def _get(self, endpoint: str, **kwargs) -> Optional[Any]:
+    def _get(self, endpoint: str, **kwargs) -> Any:
         """
         Make GET request.
 
@@ -66,11 +67,14 @@ class APIClient:
             **kwargs: Additional arguments to pass to requests
 
         Returns:
-            Response JSON if successful, None otherwise
+            Response JSON if successful
+
+        Raises:
+            requests.exceptions.RequestException: On any request failure
         """
         return self._request('GET', endpoint, **kwargs)
 
-    def _post(self, endpoint: str, data: Optional[Dict] = None, **kwargs) -> Optional[Any]:
+    def _post(self, endpoint: str, data: Optional[Dict] = None, **kwargs) -> Any:
         """
         Make POST request.
 
@@ -80,11 +84,14 @@ class APIClient:
             **kwargs: Additional arguments to pass to requests
 
         Returns:
-            Response JSON if successful, None otherwise
+            Response JSON if successful
+
+        Raises:
+            requests.exceptions.RequestException: On any request failure
         """
         return self._request('POST', endpoint, json=data, **kwargs)
 
-    def _put(self, endpoint: str, data: Optional[Dict] = None, **kwargs) -> Optional[Any]:
+    def _put(self, endpoint: str, data: Optional[Dict] = None, **kwargs) -> Any:
         """
         Make PUT request.
 
@@ -94,11 +101,14 @@ class APIClient:
             **kwargs: Additional arguments to pass to requests
 
         Returns:
-            Response JSON if successful, None otherwise
+            Response JSON if successful
+
+        Raises:
+            requests.exceptions.RequestException: On any request failure
         """
         return self._request('PUT', endpoint, json=data, **kwargs)
 
-    def _delete(self, endpoint: str, **kwargs) -> Optional[Any]:
+    def _delete(self, endpoint: str, **kwargs) -> Any:
         """
         Make DELETE request.
 
@@ -107,6 +117,9 @@ class APIClient:
             **kwargs: Additional arguments to pass to requests
 
         Returns:
-            Response JSON if successful, None otherwise
+            Response JSON if successful
+
+        Raises:
+            requests.exceptions.RequestException: On any request failure
         """
         return self._request('DELETE', endpoint, **kwargs)
