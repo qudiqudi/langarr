@@ -1,0 +1,18 @@
+# Gitleaks ignore file for known false positives
+
+# Example config files with placeholder values
+language-tagger/config.example-simple.yml:*
+language-tagger/config.example-with-overseerr.yml:*
+.env.example:*
+
+# Documentation files that reference tokens/keys as examples
+README.md:*auth_token*
+CLAUDE.md:*auth_token*
+
+# GitHub workflow files that use secrets correctly
+.github/workflows/*:GITHUB_TOKEN
+.github/workflows/*:secrets.
+
+# Test files (if you add them in the future)
+**/test_*.py:*
+**/tests/*.py:*
