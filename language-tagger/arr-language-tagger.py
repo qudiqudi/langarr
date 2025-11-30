@@ -770,6 +770,16 @@ class ArrLanguageTagger:
         port = webhook_config.get('port', 5678)
         auth_token = webhook_config.get('auth_token', None)
 
+        # Allow bypassing authentication requirement with environment variable (NOT RECOMMENDED)
+        allow_insecure = os.environ.get('ALLOW_INSECURE_WEBHOOK', 'false').lower() == 'true'
+        if allow_insecure and not auth_token:
+            logger.warning("="*80)
+            logger.warning("WARNING: Running webhook server WITHOUT authentication!")
+            logger.warning("This is a SECURITY RISK and should only be used for testing.")
+            logger.warning("Set 'webhook.auth_token' in config.yml for production use.")
+            logger.warning("="*80)
+            auth_token = "INSECURE_BYPASS"  # Dummy token to bypass validation
+
         try:
             logger.info(f"Initializing webhook server on port {port}")
             self.webhook_server = WebhookServer(
@@ -778,6 +788,10 @@ class ArrLanguageTagger:
                 overseerr_instances=self.overseerr_instances,
                 arr_instances=self.instances
             )
+        except ValueError as e:
+            logger.error(f"Failed to initialize webhook server: {e}")
+            logger.error("Please set 'webhook.auth_token' in config.yml or disable webhooks.")
+            sys.exit(1)
         except Exception as e:
             logger.error(f"Failed to initialize webhook server: {e}")
             sys.exit(1)
