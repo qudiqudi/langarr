@@ -12,7 +12,24 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 3. Service runs every 24 hours (configurable) to tag new content
 4. Optional webhook support for instant updates on new Overseerr/Seerr requests
 
-## Development Commands
+## Development Workflow
+
+### Branch Strategy
+- **main** - Stable production releases (protected, requires PR)
+- **develop** - Integration/testing branch (debug features enabled)
+- **feature/** - Feature development branches (merge to develop)
+
+### Release Process
+1. Work on `develop` branch or feature branches
+2. Test with `:develop` Docker tag
+3. Create PR from `develop` → `main`
+4. Merge to main → triggers `:latest` build
+5. Tag with `v1.x.x` → triggers versioned builds
+
+### Docker Image Tags
+- `latest` - Latest stable release (production)
+- `v1.0.1` - Specific version (pinned/stable)
+- `develop` - Development builds (testing/debug)
 
 ### Docker Build & Run
 ```bash
@@ -25,6 +42,9 @@ docker logs -f langarr
 
 # Stop service
 docker-compose down langarr
+
+# Use develop tag for testing
+image: ghcr.io/qudiqudi/langarr:develop
 ```
 
 ### Testing
@@ -76,8 +96,13 @@ Example config structure at `language-tagger/config.yml`
 - `WebhookServer`: Flask-based webhook server
   - Listens for `MEDIA_PENDING` and `MEDIA_AUTO_APPROVED` events
   - Processes requests in real-time (vs 24-hour polling)
-  - Optional authentication via `X-Auth-Token` header
+  - **Mandatory authentication** (multiple header formats supported)
+    - `Authorization: <token>` (Seerr/Overseerr)
+    - `Authorization: Bearer <token>`
+    - `X-Auth-Token: <token>`
+  - Rate limiting: 20 requests/minute
   - Runs in separate thread alongside scheduled sync
+  - **Seerr compatibility**: Handles tmdbId as both string and integer
 
 ### Configuration Structure
 
@@ -89,7 +114,7 @@ schedule:
 webhook:
   enabled: true
   port: 5678
-  auth_token: ""  # Optional
+  auth_token: "secure-random-token"  # REQUIRED for security (generate with: openssl rand -hex 32)
 
 overseerr:
   main:  # Instance name
@@ -166,6 +191,15 @@ Key differentiator is language-specific custom format scoring (see `recyclarr/RE
 2. Verify profiles exist in Radarr/Sonarr: Settings → Profiles
 3. Check logs for language detection issues
 4. For webhooks: verify port 5678 is exposed and accessible
+
+### Webhook Security
+- **Authentication is mandatory by default** (v1.0.0+)
+- Generate token: `openssl rand -hex 32`
+- Add to config.yml: `webhook.auth_token`
+- Configure in Seerr/Overseerr: Authorization Header with token value only
+- For testing only: Set `ALLOW_INSECURE_WEBHOOK=true` env var (NOT recommended)
+- Rate limiting: 20 requests/minute prevents DoS attacks
+- Constant-time token comparison prevents timing attacks
 
 ### Multi-Instance Support
 The codebase supports multiple Radarr/Sonarr instances (e.g., 4K, Anime separate servers). Instance names in config must match env var patterns.
