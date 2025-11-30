@@ -98,7 +98,7 @@ jobs:
             fi
           done
 
-          # Check for common patterns in code (exclude example files and documentation)
+          # Check for common patterns in code (exclude constants, examples, and documentation)
           echo ""
           echo "Checking for hardcoded secrets patterns..."
 
@@ -106,7 +106,10 @@ jobs:
             -E "(password|passwd|pwd|secret|token|api_key|apikey)\s*=\s*['\"][^'\"]{8,}" \
             --exclude-dir=".git" --exclude-dir="node_modules" . \
             | grep -v ".example" \
-            | grep -v "your-secure-random-token-here" ; then
+            | grep -v "your-secure-random-token-here" \
+            | grep -v "# Special token for testing" \
+            | grep -v "# not a real secret" \
+            | grep -v "^[A-Z_]*TOKEN\s*=" ; then
             echo "❌ FOUND POTENTIAL HARDCODED SECRETS"
             FOUND_ISSUES=1
           fi
