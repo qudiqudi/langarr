@@ -138,15 +138,15 @@ class ArrInstance(APIClient):
         self.last_triggered_searches = {}  # {item_id: timestamp}
         self.last_any_search = 0
 
-    def _get(self, endpoint: str, **kwargs) -> dict:
+    def _get(self, endpoint: str, params: Optional[Dict] = None, **kwargs) -> dict:
         """Make GET request to Arr API (v3)."""
-        return super()._get(f"api/v3/{endpoint}", **kwargs)
+        return super()._get(f"api/v3/{endpoint}", params, **kwargs)
 
-    def _post(self, endpoint: str, data: dict, **kwargs) -> dict:
+    def _post(self, endpoint: str, data: Optional[Dict] = None, **kwargs) -> dict:
         """Make POST request to Arr API (v3)."""
         return super()._post(f"api/v3/{endpoint}", data, **kwargs)
 
-    def _put(self, endpoint: str, data: dict, **kwargs) -> dict:
+    def _put(self, endpoint: str, data: Optional[Dict] = None, **kwargs) -> dict:
         """Make PUT request to Arr API (v3)."""
         return super()._put(f"api/v3/{endpoint}", data, **kwargs)
 
