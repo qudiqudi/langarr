@@ -14,9 +14,9 @@ version: '3.8'
 # ============================================================================
 
 services:
-  langarr-tagger:
+  langarr:
     image: ghcr.io/qudiqudi/langarr:latest
-    container_name: langarr-tagger
+    container_name: langarr
     read_only: true
     tmpfs: /tmp
     security_opt:

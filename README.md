@@ -29,9 +29,9 @@ Perfect for multilingual libraries where you want original audio for some langua
 **Using pre-built image (recommended):**
 ```yaml
 services:
-  langarr-tagger:
+  langarr:
     image: ghcr.io/qudiqudi/langarr:latest
-    container_name: langarr-tagger
+    container_name: langarr
     ports:
       - "5678:5678"  # For webhook support
     environment:
@@ -102,8 +102,8 @@ webhook:
 ### 4. Start Service
 
 ```bash
-docker-compose up -d langarr-tagger
-docker logs -f langarr-tagger
+docker-compose up -d langarr
+docker logs -f langarr
 ```
 
 ## Configuration
@@ -176,14 +176,14 @@ webhook:
 **2. Expose port in docker-compose:**
 ```yaml
 services:
-  langarr-tagger:
+  langarr:
     ports:
       - "5678:5678"
 ```
 
 **3. Configure in Seerr/Overseerr:**
 - Settings → Notifications → Webhook
-- URL: `http://langarr-tagger:5678/webhook`
+- URL: `http://langarr:5678/webhook`
 - Enable: **Media Auto Approved** + **Media Pending**
 
 **How it works:**
@@ -210,7 +210,7 @@ User requests → Webhook fires → Langarr updates profile in Radarr
 
 ### Test with Dry-Run
 ```bash
-docker exec langarr-tagger env DRY_RUN=true python3 /app/arr-language-tagger.py
+docker exec langarr env DRY_RUN=true python3 /app/arr-language-tagger.py
 ```
 
 ### Common Issues
@@ -223,13 +223,13 @@ docker exec recyclarr recyclarr sync
 
 **Items not being tagged?**
 ```bash
-docker logs langarr-tagger
+docker logs langarr
 # Verify profile names match exactly
 ```
 
 **Webhook not working?**
 ```bash
-docker logs -f langarr-tagger
+docker logs -f langarr
 # Check for "Received webhook" messages
 # Verify port 5678 is exposed
 ```
