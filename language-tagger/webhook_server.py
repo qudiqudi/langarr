@@ -11,10 +11,12 @@ the request is fully processed by Radarr/Sonarr.
 import logging
 import json
 import time
+import hmac
+import os
 from flask import Flask, request, jsonify
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
-from typing import Dict, Optional, List
+from typing import Dict, Optional, List, Tuple
 from threading import Thread
 
 logger = logging.getLogger(__name__)
@@ -48,7 +50,11 @@ class WebhookServer:
             )
 
         self.auth_token = auth_token
-        self.is_insecure_mode = (auth_token == "INSECURE_BYPASS")
+        # Only enable insecure mode if BOTH conditions are met:
+        # 1. Environment variable is explicitly set to true
+        # 2. Token matches the bypass value
+        allow_insecure = os.environ.get('ALLOW_INSECURE_WEBHOOK', 'false').lower() == 'true'
+        self.is_insecure_mode = (allow_insecure and auth_token == "INSECURE_BYPASS")
         self.overseerr_instances = overseerr_instances
         self.arr_instances = arr_instances
 
@@ -78,7 +84,7 @@ class WebhookServer:
         """Health check endpoint."""
         return jsonify({'status': 'healthy'}), 200
 
-    def validate_webhook_payload(self, payload: Dict) -> tuple[bool, Optional[str]]:
+    def validate_webhook_payload(self, payload: Dict) -> Tuple[bool, Optional[str]]:
         """
         Validate webhook payload structure and required fields.
 
@@ -122,7 +128,8 @@ class WebhookServer:
                     logger.warning(f"Webhook request from {get_remote_address()} without auth token")
                     return jsonify({'error': 'Unauthorized - X-Auth-Token header required'}), 401
 
-                if provided_token != self.auth_token:
+                # Use constant-time comparison to prevent timing attacks
+                if not hmac.compare_digest(provided_token, self.auth_token):
                     logger.warning(f"Webhook request from {get_remote_address()} with invalid auth token")
                     return jsonify({'error': 'Unauthorized - Invalid token'}), 401
 
