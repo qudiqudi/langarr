@@ -97,6 +97,7 @@ sonarr:
 webhook:
   enabled: true
   port: 5678
+  auth_token: "your-secure-random-token-here"  # REQUIRED for security
 ```
 
 ### 4. Start Service
@@ -171,6 +172,7 @@ For instant profile updates with auto-approve enabled:
 webhook:
   enabled: true
   port: 5678
+  auth_token: "your-secure-random-token-here"  # REQUIRED for security
 ```
 
 **2. Expose port in docker-compose:**
@@ -184,6 +186,7 @@ services:
 **3. Configure in Seerr/Overseerr:**
 - Settings → Notifications → Webhook
 - URL: `http://langarr:5678/webhook`
+- Authorization Header: `X-Auth-Token: your-secure-random-token-here` (must match config.yml)
 - Enable: **Media Auto Approved** + **Media Pending**
 
 **How it works:**
