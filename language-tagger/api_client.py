@@ -25,6 +25,13 @@ class APIClient:
         self.api_key = api_key
         self.name = name
 
+        # Use session for connection pooling and performance
+        self.session = requests.Session()
+        self.session.headers.update({
+            'X-Api-Key': self.api_key,
+            'Content-Type': 'application/json'
+        })
+
     def _request(self, method: str, endpoint: str, **kwargs) -> Any:
         """
         Make HTTP request with common error handling.
@@ -41,12 +48,17 @@ class APIClient:
             requests.exceptions.RequestException: On any request failure
         """
         url = f"{self.base_url}/{endpoint.lstrip('/')}"
+
+        # Allow overriding default headers if needed
         headers = kwargs.pop('headers', {})
-        headers['X-Api-Key'] = self.api_key
-        headers.setdefault('Content-Type', 'application/json')
+        if headers:
+            # Merge with session headers (explicit headers take precedence)
+            merged_headers = self.session.headers.copy()
+            merged_headers.update(headers)
+            kwargs['headers'] = merged_headers
 
         try:
-            response = requests.request(method, url, headers=headers, timeout=30, **kwargs)
+            response = self.session.request(method, url, timeout=30, **kwargs)
             response.raise_for_status()
             return response.json() if response.text else {}
         except requests.exceptions.HTTPError as e:
