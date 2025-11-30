@@ -186,7 +186,9 @@ services:
 **3. Configure in Seerr/Overseerr:**
 - Settings → Notifications → Webhook
 - URL: `http://langarr:5678/webhook`
-- Authorization Header: `X-Auth-Token: your-secure-random-token-here` (must match config.yml)
+- Authorization Header: `your-secure-random-token-here` (must match config.yml auth_token)
+  - **Note:** Enter just the token value, not `X-Auth-Token:` or `Bearer`
+  - The server accepts: `Authorization`, `Bearer <token>`, or `X-Auth-Token` formats
 - Enable: **Media Auto Approved** + **Media Pending**
 
 **How it works:**

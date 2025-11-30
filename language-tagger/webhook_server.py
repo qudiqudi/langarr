@@ -123,10 +123,22 @@ class WebhookServer:
         try:
             # Verify auth token (unless in insecure mode)
             if not self.is_insecure_mode:
+                # Try multiple header formats for compatibility with different webhook senders
                 provided_token = request.headers.get('X-Auth-Token')
+
+                # Fallback: Check standard Authorization header (Bearer token)
+                if not provided_token:
+                    auth_header = request.headers.get('Authorization')
+                    if auth_header and auth_header.startswith('Bearer '):
+                        provided_token = auth_header[7:]  # Strip 'Bearer ' prefix
+
+                # Fallback: Check Authorization header without Bearer prefix
+                if not provided_token:
+                    provided_token = request.headers.get('Authorization')
+
                 if not provided_token:
                     logger.warning(f"Webhook request from {get_remote_address()} without auth token")
-                    return jsonify({'error': 'Unauthorized - X-Auth-Token header required'}), 401
+                    return jsonify({'error': 'Unauthorized - Auth token required'}), 401
 
                 # Use constant-time comparison to prevent timing attacks
                 if not hmac.compare_digest(provided_token, self.auth_token):
