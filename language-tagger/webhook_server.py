@@ -109,6 +109,13 @@ class WebhookServer:
                 return False, "Missing or invalid 'media' field"
 
             tmdb_id = media.get('tmdbId')
+            # Seerr/Overseerr may send tmdbId as string or int - handle both
+            if isinstance(tmdb_id, str):
+                try:
+                    tmdb_id = int(tmdb_id)
+                except (ValueError, TypeError):
+                    return False, "Invalid 'media.tmdbId' field (cannot convert to integer)"
+
             if not isinstance(tmdb_id, int) or tmdb_id <= 0:
                 return False, "Missing or invalid 'media.tmdbId' field (must be positive integer)"
 
