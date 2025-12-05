@@ -14,7 +14,7 @@ Perfect for multilingual libraries where you want original audio for some langua
 
 **What you need:**
 - Radarr v3+ and/or Sonarr v3+ (v4 recommended)
-- Recyclarr already running in your docker-compose stack
+- Recyclarr already running in your docker compose stack
 - Docker & Docker Compose
 
 **What it does:**
@@ -60,7 +60,7 @@ git clone https://github.com/qudiqudi/langarr.git
 cd langarr
 ```
 
-Then use `build: ./langarr/language-tagger` instead of `image:` in docker-compose.
+Then use `build: ./langarr/language-tagger` instead of `image:` in docker-compose.yml.
 
 ### 2. Add Recyclarr Profiles
 
@@ -181,7 +181,7 @@ webhook:
   auth_token: "your-secure-random-token-here"  # REQUIRED for security
 ```
 
-**2. Expose port in docker-compose:**
+**2. Expose port in docker-compose.yml:**
 ```yaml
 services:
   langarr:
