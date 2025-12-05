@@ -36,12 +36,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 # Build Docker image locally
 docker build -t langarr:local ./language-tagger
 
-# Run with docker-compose (using pre-built image)
-docker-compose up -d langarr
+# Run with docker compose (using pre-built image)
+docker compose up -d langarr
 docker logs -f langarr
 
 # Stop service
-docker-compose down langarr
+docker compose down langarr
 
 # Use develop tag for testing
 image: ghcr.io/qudiqudi/langarr:develop

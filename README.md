@@ -109,7 +109,7 @@ webhook:
 ### 4. Start Service
 
 ```bash
-docker-compose up -d langarr
+docker compose up -d langarr
 docker logs -f langarr
 ```
 
