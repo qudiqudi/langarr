@@ -22,7 +22,7 @@ import requests
 import logging
 import schedule
 import fcntl
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Set
 from pathlib import Path
 from overseerr_integration import OverseerrInstance
 from webhook_server import WebhookServer
@@ -367,6 +367,20 @@ class ArrInstance(APIClient):
         logger.info(f"[{self.name}] Found {len(items)} {endpoint}")
         return items
 
+    def get_movie_files(self) -> List[Dict]:
+        """Fetch all movie files with mediaInfo (Radarr only)."""
+        if self.service_type != "radarr":
+            logger.warning(f"[{self.name}] get_movie_files called on non-Radarr instance")
+            return []
+        return self._get("moviefile")
+
+    def get_episode_files(self, series_id: int) -> List[Dict]:
+        """Fetch episode files for a series with mediaInfo (Sonarr only)."""
+        if self.service_type != "sonarr":
+            logger.warning(f"[{self.name}] get_episode_files called on non-Sonarr instance")
+            return []
+        return self._get(f"episodefile?seriesId={series_id}")
+
     def find_item_by_tmdb_id(self, tmdb_id: int) -> Optional[Dict]:
         """
         Find a movie or series by TMDB ID.
@@ -588,6 +602,413 @@ class ArrInstance(APIClient):
             return False
 
 
+class AudioTagProcessor:
+    """
+    Processes audio track languages from mediaInfo and applies tags.
+
+    Unlike profile assignment (which uses original language metadata),
+    this inspects the actual mediaInfo of imported files to detect
+    which audio tracks are present.
+    """
+
+    # Language name normalization map (various forms -> canonical name)
+    LANGUAGE_ALIASES = {
+        # German
+        'de': 'german', 'deu': 'german', 'ger': 'german', 'german': 'german', 'deutsch': 'german',
+        # English
+        'en': 'english', 'eng': 'english', 'english': 'english',
+        # French
+        'fr': 'french', 'fra': 'french', 'fre': 'french', 'french': 'french', 'francais': 'french',
+        # Spanish
+        'es': 'spanish', 'spa': 'spanish', 'spanish': 'spanish', 'espanol': 'spanish',
+        # Italian
+        'it': 'italian', 'ita': 'italian', 'italian': 'italian', 'italiano': 'italian',
+        # Japanese
+        'ja': 'japanese', 'jpn': 'japanese', 'japanese': 'japanese',
+        # Korean
+        'ko': 'korean', 'kor': 'korean', 'korean': 'korean',
+        # Chinese
+        'zh': 'chinese', 'zho': 'chinese', 'chi': 'chinese', 'chinese': 'chinese', 'mandarin': 'chinese',
+        # Russian
+        'ru': 'russian', 'rus': 'russian', 'russian': 'russian',
+        # Portuguese
+        'pt': 'portuguese', 'por': 'portuguese', 'portuguese': 'portuguese',
+        # Dutch
+        'nl': 'dutch', 'nld': 'dutch', 'dut': 'dutch', 'dutch': 'dutch',
+        # Polish
+        'pl': 'polish', 'pol': 'polish', 'polish': 'polish',
+        # Swedish
+        'sv': 'swedish', 'swe': 'swedish', 'swedish': 'swedish',
+        # Norwegian
+        'no': 'norwegian', 'nor': 'norwegian', 'norwegian': 'norwegian',
+        # Danish
+        'da': 'danish', 'dan': 'danish', 'danish': 'danish',
+        # Finnish
+        'fi': 'finnish', 'fin': 'finnish', 'finnish': 'finnish',
+        # Turkish
+        'tr': 'turkish', 'tur': 'turkish', 'turkish': 'turkish',
+        # Arabic
+        'ar': 'arabic', 'ara': 'arabic', 'arabic': 'arabic',
+        # Hindi
+        'hi': 'hindi', 'hin': 'hindi', 'hindi': 'hindi',
+        # Czech
+        'cs': 'czech', 'ces': 'czech', 'cze': 'czech', 'czech': 'czech',
+        # Hungarian
+        'hu': 'hungarian', 'hun': 'hungarian', 'hungarian': 'hungarian',
+        # Thai
+        'th': 'thai', 'tha': 'thai', 'thai': 'thai',
+        # Vietnamese
+        'vi': 'vietnamese', 'vie': 'vietnamese', 'vietnamese': 'vietnamese',
+    }
+
+    def __init__(self, arr_instances: List[ArrInstance], config: dict):
+        """
+        Initialize audio tag processor.
+
+        Args:
+            arr_instances: List of initialized ArrInstance objects
+            config: The audio_tags config section
+        """
+        # Store instances by service_type for lookup
+        self.radarr_instances = {inst.name: inst for inst in arr_instances if inst.service_type == 'radarr'}
+        self.sonarr_instances = {inst.name: inst for inst in arr_instances if inst.service_type == 'sonarr'}
+        self.config = config
+        self.enabled = config.get('enabled', False)
+        self.dry_run = os.environ.get('DRY_RUN', 'false').lower() == 'true'
+
+        # Tag ID cache per instance: {service_type_name: {tag_name: tag_id}}
+        self.tag_ids: Dict[str, Dict[str, int]] = {}
+
+    @staticmethod
+    def parse_audio_languages(media_info: Optional[Dict]) -> Set[str]:
+        """
+        Parse audioLanguages string from mediaInfo into normalized language set.
+
+        Radarr/Sonarr return audioLanguages as a slash-separated string like:
+        "English", "English / German", "Japanese/English"
+
+        Returns:
+            Set of normalized canonical language names (e.g., {'english', 'german'})
+        """
+        if not media_info:
+            return set()
+
+        audio_langs = media_info.get('audioLanguages', '')
+        if not audio_langs:
+            return set()
+
+        # Split by slash (handle both "English/German" and "English / German")
+        raw_langs = [lang.strip().lower() for lang in audio_langs.split('/')]
+
+        # Normalize to canonical names
+        normalized = set()
+        for lang in raw_langs:
+            if not lang:
+                continue
+            # Check if it's a known alias
+            canonical = AudioTagProcessor.LANGUAGE_ALIASES.get(lang)
+            if canonical:
+                normalized.add(canonical)
+            else:
+                # Try partial matching for names like "english (us)"
+                for alias, canonical_name in AudioTagProcessor.LANGUAGE_ALIASES.items():
+                    if alias in lang or lang in alias:
+                        normalized.add(canonical_name)
+                        break
+                else:
+                    # Unknown language - keep as-is (lowercase)
+                    normalized.add(lang)
+
+        return normalized
+
+    def ensure_tags_exist(self, instance: ArrInstance, tag_names: List[str]) -> Dict[str, int]:
+        """
+        Ensure all required tags exist for an instance.
+
+        Args:
+            instance: The ArrInstance to check/create tags on
+            tag_names: List of tag names to ensure exist
+
+        Returns:
+            Dict mapping tag_name -> tag_id
+        """
+        if instance.name in self.tag_ids:
+            # Check if we already have all needed tags cached
+            cached = self.tag_ids[instance.name]
+            if all(name in cached for name in tag_names):
+                return cached
+
+        # Fetch existing tags
+        existing_tags = instance._get("tag")
+        tag_map = {tag['label']: tag['id'] for tag in existing_tags}
+
+        # Create missing tags
+        for tag_name in tag_names:
+            if tag_name not in tag_map:
+                if self.dry_run:
+                    logger.info(f"[{instance.name}] [DRY-RUN] Would create audio tag '{tag_name}'")
+                    tag_map[tag_name] = 999999  # Fake ID for dry-run
+                else:
+                    logger.info(f"[{instance.name}] Creating audio tag '{tag_name}'...")
+                    new_tag = instance._post("tag", {"label": tag_name})
+                    tag_map[tag_name] = new_tag['id']
+                    logger.info(f"[{instance.name}] Created tag '{tag_name}' -> ID {new_tag['id']}")
+
+        # Cache the tag IDs
+        self.tag_ids[instance.name] = tag_map
+        return tag_map
+
+    def update_item_tags(self, instance: ArrInstance, item: Dict, tags_to_add: Set[int], tags_to_remove: Set[int]) -> bool:
+        """
+        Update an item's tags (add/remove audio language tags).
+
+        Args:
+            instance: The ArrInstance to update
+            item: The movie/series item dict
+            tags_to_add: Set of tag IDs to add
+            tags_to_remove: Set of tag IDs to remove
+
+        Returns:
+            True if item was updated, False otherwise
+        """
+        current_tags = set(item.get('tags', []))
+        new_tags = (current_tags | tags_to_add) - tags_to_remove
+
+        if new_tags == current_tags:
+            return False  # No change needed
+
+        item_id = item['id']
+        title = item.get('title', 'Unknown')
+
+        if self.dry_run:
+            added = tags_to_add - current_tags
+            removed = tags_to_remove & current_tags
+            changes = []
+            if added:
+                changes.append(f"add {len(added)} tag(s)")
+            if removed:
+                changes.append(f"remove {len(removed)} tag(s)")
+            logger.info(f"[{instance.name}] [DRY-RUN] Would update '{title}': {', '.join(changes)}")
+            return False
+
+        try:
+            endpoint = "movie" if instance.service_type == "radarr" else "series"
+            update_payload = item.copy()
+            update_payload['tags'] = list(new_tags)
+            instance._put(f"{endpoint}/{item_id}", update_payload)
+            logger.info(f"[{instance.name}] Updated audio tags for '{title}'")
+            return True
+        except Exception as e:
+            logger.error(f"[{instance.name}] Failed to update audio tags for '{title}': {e}")
+            return False
+
+    def process_radarr_instance(self, instance_name: str, tag_config: List[Dict]) -> Dict[str, int]:
+        """
+        Process a single Radarr instance for audio tagging.
+
+        Args:
+            instance_name: Name of the instance (must match config)
+            tag_config: List of {language: str, tag_name: str} dicts
+
+        Returns:
+            Stats dict with 'updated', 'skipped', 'no_file' counts
+        """
+        if instance_name not in self.radarr_instances:
+            logger.error(f"[audio_tags] Radarr instance '{instance_name}' not found")
+            return {'updated': 0, 'skipped': 0, 'no_file': 0}
+
+        instance = self.radarr_instances[instance_name]
+
+        logger.info(f"[{instance_name}] Starting Radarr audio tag scan...")
+
+        # Build language -> tag_name mapping and normalize languages
+        lang_to_tag: Dict[str, str] = {}
+        for mapping in tag_config:
+            lang = mapping.get('language', '').lower()
+            tag_name = mapping.get('tag_name', '')
+            if lang and tag_name:
+                # Normalize language to canonical form
+                canonical = self.LANGUAGE_ALIASES.get(lang, lang)
+                lang_to_tag[canonical] = tag_name
+
+        if not lang_to_tag:
+            logger.warning(f"[{instance_name}] No valid language-tag mappings configured")
+            return {'updated': 0, 'skipped': 0, 'no_file': 0}
+
+        # Ensure all tags exist
+        tag_names = list(lang_to_tag.values())
+        tag_map = self.ensure_tags_exist(instance, tag_names)
+
+        # Build tag_id -> canonical_language reverse mapping for removal logic
+        tag_id_to_lang: Dict[int, str] = {}
+        for lang, tag_name in lang_to_tag.items():
+            if tag_name in tag_map:
+                tag_id_to_lang[tag_map[tag_name]] = lang
+
+        # Fetch all movies (includes movieFile with mediaInfo)
+        movies = instance.get_all_items()
+
+        stats = {'updated': 0, 'skipped': 0, 'no_file': 0}
+
+        for idx, movie in enumerate(movies, 1):
+            if idx % 100 == 0:
+                logger.info(f"[{instance_name}] Audio tag progress: {idx}/{len(movies)}")
+
+            movie_file = movie.get('movieFile')
+            if not movie_file:
+                stats['no_file'] += 1
+                continue
+
+            media_info = movie_file.get('mediaInfo')
+            detected_langs = self.parse_audio_languages(media_info)
+
+            # Determine which tags should be present
+            tags_to_add: Set[int] = set()
+            tags_to_remove: Set[int] = set()
+
+            for lang, tag_name in lang_to_tag.items():
+                tag_id = tag_map.get(tag_name)
+                if not tag_id:
+                    continue
+
+                if lang in detected_langs:
+                    tags_to_add.add(tag_id)
+                else:
+                    tags_to_remove.add(tag_id)
+
+            if self.update_item_tags(instance, movie, tags_to_add, tags_to_remove):
+                stats['updated'] += 1
+            else:
+                stats['skipped'] += 1
+
+        return stats
+
+    def process_sonarr_instance(self, instance_name: str, tag_config: List[Dict]) -> Dict[str, int]:
+        """
+        Process a single Sonarr instance for audio tagging.
+
+        For Sonarr, we check if ANY episode has the language and tag the series.
+
+        Args:
+            instance_name: Name of the instance (must match config)
+            tag_config: List of {language: str, tag_name: str} dicts
+
+        Returns:
+            Stats dict with 'updated', 'skipped', 'no_file' counts
+        """
+        if instance_name not in self.sonarr_instances:
+            logger.error(f"[audio_tags] Sonarr instance '{instance_name}' not found")
+            return {'updated': 0, 'skipped': 0, 'no_file': 0}
+
+        instance = self.sonarr_instances[instance_name]
+
+        logger.info(f"[{instance_name}] Starting Sonarr audio tag scan...")
+
+        # Build language -> tag_name mapping
+        lang_to_tag: Dict[str, str] = {}
+        for mapping in tag_config:
+            lang = mapping.get('language', '').lower()
+            tag_name = mapping.get('tag_name', '')
+            if lang and tag_name:
+                canonical = self.LANGUAGE_ALIASES.get(lang, lang)
+                lang_to_tag[canonical] = tag_name
+
+        if not lang_to_tag:
+            logger.warning(f"[{instance_name}] No valid language-tag mappings configured")
+            return {'updated': 0, 'skipped': 0, 'no_file': 0}
+
+        # Ensure all tags exist
+        tag_names = list(lang_to_tag.values())
+        tag_map = self.ensure_tags_exist(instance, tag_names)
+
+        # Fetch all series
+        series_list = instance.get_all_items()
+
+        stats = {'updated': 0, 'skipped': 0, 'no_file': 0}
+
+        for idx, series in enumerate(series_list, 1):
+            if idx % 50 == 0:
+                logger.info(f"[{instance_name}] Audio tag progress: {idx}/{len(series_list)} series")
+
+            series_id = series['id']
+
+            # Fetch episode files for this series
+            try:
+                episode_files = instance.get_episode_files(series_id)
+            except Exception as e:
+                logger.warning(f"[{instance_name}] Failed to get episode files for series {series_id}: {e}")
+                stats['no_file'] += 1
+                continue
+
+            if not episode_files:
+                stats['no_file'] += 1
+                continue
+
+            # Collect all languages across all episodes
+            all_detected_langs: Set[str] = set()
+            for ep_file in episode_files:
+                media_info = ep_file.get('mediaInfo')
+                detected = self.parse_audio_languages(media_info)
+                all_detected_langs.update(detected)
+
+            # Determine which tags should be present
+            tags_to_add: Set[int] = set()
+            tags_to_remove: Set[int] = set()
+
+            for lang, tag_name in lang_to_tag.items():
+                tag_id = tag_map.get(tag_name)
+                if not tag_id:
+                    continue
+
+                if lang in all_detected_langs:
+                    tags_to_add.add(tag_id)
+                else:
+                    tags_to_remove.add(tag_id)
+
+            if self.update_item_tags(instance, series, tags_to_add, tags_to_remove):
+                stats['updated'] += 1
+            else:
+                stats['skipped'] += 1
+
+        return stats
+
+    def run(self) -> None:
+        """Run audio tag processing for all configured instances."""
+        if not self.enabled:
+            logger.debug("[audio_tags] Audio tagging is disabled")
+            return
+
+        logger.info("="*80)
+        logger.info("Audio Tag Processor - Starting scan")
+        if self.dry_run:
+            logger.info("[audio_tags] DRY-RUN MODE: No changes will be made")
+        logger.info("="*80)
+
+        # Process Radarr instances
+        radarr_config = self.config.get('radarr', {})
+        for instance_name, instance_config in radarr_config.items():
+            tags = instance_config.get('tags', [])
+            if tags:
+                stats = self.process_radarr_instance(instance_name, tags)
+                logger.info(f"[{instance_name}] Audio tag scan complete: "
+                          f"{stats['updated']} updated, {stats['skipped']} unchanged, "
+                          f"{stats['no_file']} without files")
+
+        # Process Sonarr instances
+        sonarr_config = self.config.get('sonarr', {})
+        for instance_name, instance_config in sonarr_config.items():
+            tags = instance_config.get('tags', [])
+            if tags:
+                stats = self.process_sonarr_instance(instance_name, tags)
+                logger.info(f"[{instance_name}] Audio tag scan complete: "
+                          f"{stats['updated']} updated, {stats['skipped']} unchanged, "
+                          f"{stats['no_file']} without files")
+
+        logger.info("="*80)
+        logger.info("Audio Tag Processor - Scan complete")
+        logger.info("="*80)
+
+
 class ArrLanguageTagger:
     """Main application class."""
 
@@ -599,11 +1020,13 @@ class ArrLanguageTagger:
         self.instances = []
         self.overseerr_instances = []
         self.webhook_server = None
+        self.audio_tag_processor = None
 
         # Initialize instances
         self.init_instances()
         self.init_overseerr()
         self.init_webhook()
+        self.init_audio_tags()
 
     def load_config(self) -> dict:
         """Load configuration from YAML file."""
@@ -771,6 +1194,33 @@ class ArrLanguageTagger:
             logger.error(f"Failed to initialize webhook server: {e}")
             sys.exit(1)
 
+    def init_audio_tags(self) -> None:
+        """Initialize audio tag processor from config (optional)."""
+        if 'audio_tags' not in self.config:
+            logger.info("Audio tagging disabled (not in config)")
+            return
+
+        audio_config = self.config['audio_tags']
+        if not audio_config.get('enabled', False):
+            logger.info("Audio tagging disabled (enabled=false)")
+            return
+
+        try:
+            logger.info("Initializing audio tag processor...")
+            self.audio_tag_processor = AudioTagProcessor(self.instances, audio_config)
+            logger.info("Audio tag processor initialized")
+        except Exception as e:
+            logger.error(f"Failed to initialize audio tag processor: {e}")
+            # Don't exit - audio tagging is optional
+
+    def run_audio_tags(self) -> None:
+        """Run audio tag processing."""
+        if self.audio_tag_processor:
+            try:
+                self.audio_tag_processor.run()
+            except Exception as e:
+                logger.error(f"Error during audio tag processing: {e}", exc_info=True)
+
     def run_once(self) -> None:
         """Run processing once for all instances."""
         logger.info("="*80)
@@ -801,20 +1251,39 @@ class ArrLanguageTagger:
         logger.info(f"Sync complete: {success_count} successful, {failure_count} failed")
         logger.info("="*80)
 
+        # Run audio tag processing after profile sync
+        self.run_audio_tags()
+
     def run_scheduled(self) -> None:
         """Run on schedule."""
         schedule_config = self.config.get('schedule', {})
         interval_hours = schedule_config.get('interval_hours', 24)
         run_on_startup = schedule_config.get('run_on_startup', True)
 
-        logger.info(f"Scheduling sync every {interval_hours} hours")
+        logger.info(f"Scheduling profile sync every {interval_hours} hours")
 
         # Start webhook server if configured
         if self.webhook_server:
             self.webhook_server.start()
 
-        # Schedule the job
+        # Schedule profile sync job
         schedule.every(interval_hours).hours.do(self.run_once)
+
+        # Schedule audio tag job (can have separate interval)
+        if self.audio_tag_processor:
+            audio_config = self.config.get('audio_tags', {})
+            audio_interval = audio_config.get('scan_interval_hours', 24)
+            audio_on_startup = audio_config.get('scan_on_startup', True)
+
+            if audio_interval != interval_hours:
+                # Only schedule separately if interval differs
+                logger.info(f"Scheduling audio tag scan every {audio_interval} hours")
+                schedule.every(audio_interval).hours.do(self.run_audio_tags)
+
+            if audio_on_startup and not run_on_startup:
+                # Run audio tags on startup even if main sync doesn't
+                logger.info("Running initial audio tag scan on startup...")
+                self.run_audio_tags()
 
         # Run immediately on startup if configured
         if run_on_startup:

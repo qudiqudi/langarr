@@ -104,6 +104,14 @@ Example config structure at `language-tagger/config.yml`
   - Runs in separate thread alongside scheduled sync
   - **Seerr compatibility**: Handles tmdbId as both string and integer
 
+**4. AudioTagProcessor** (in arr-language-tagger.py)
+- Tags media based on **actual audio tracks** in downloaded files (not original language metadata)
+- Parses `mediaInfo.audioLanguages` from Radarr/Sonarr API (slash-separated string like "English / German")
+- Normalizes language names (handles ISO codes, full names, variations)
+- Adds/removes tags based on detected audio tracks
+- For Sonarr: checks all episode files, tags series if ANY episode has the language
+- Runs on configurable schedule (default: every 24 hours, same as profile sync)
+
 ### Configuration Structure
 
 ```yaml
@@ -141,6 +149,23 @@ radarr:
 
 sonarr:
   main:  # Same structure as radarr
+
+audio_tags:
+  enabled: true
+  scan_interval_hours: 24
+  scan_on_startup: true
+  radarr:
+    main:
+      tags:
+        - language: de
+          tag_name: german-audio
+        - language: en
+          tag_name: english-audio
+  sonarr:
+    main:
+      tags:
+        - language: de
+          tag_name: german-audio
 ```
 
 ### Environment Variable Patterns
@@ -225,3 +250,19 @@ User requests content in Overseerr
 ```
 
 Without webhook: profiles updated every 24 hours (still works, just slower).
+
+### Audio Track Tagging
+
+Separate from profile assignment, audio tagging inspects downloaded files:
+
+1. Fetches `movieFile.mediaInfo.audioLanguages` (Radarr) or `episodeFile.mediaInfo` (Sonarr)
+2. Parses slash-separated language string (e.g., "English / German")
+3. Normalizes language names using `LANGUAGE_ALIASES` mapping
+4. Adds configured tags (e.g., `german-audio`) if language is detected
+5. Removes tags if language is no longer present (file replaced)
+
+**Use case:** Tag all content that has German audio, regardless of original language. Useful for filtering in Plex/Jellyfin.
+
+**Difference from profile assignment:**
+- Profile assignment: Uses TMDB original language metadata (pre-download)
+- Audio tagging: Uses actual mediaInfo from downloaded files (post-download)
