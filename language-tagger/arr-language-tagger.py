@@ -669,12 +669,14 @@ class AudioTagProcessor:
             arr_instances: List of initialized ArrInstance objects
             config: The audio_tags config section
         """
-        self.arr_instances = {inst.name: inst for inst in arr_instances}
+        # Store instances by service_type for lookup
+        self.radarr_instances = {inst.name: inst for inst in arr_instances if inst.service_type == 'radarr'}
+        self.sonarr_instances = {inst.name: inst for inst in arr_instances if inst.service_type == 'sonarr'}
         self.config = config
         self.enabled = config.get('enabled', False)
         self.dry_run = os.environ.get('DRY_RUN', 'false').lower() == 'true'
 
-        # Tag ID cache per instance: {instance_name: {tag_name: tag_id}}
+        # Tag ID cache per instance: {service_type_name: {tag_name: tag_id}}
         self.tag_ids: Dict[str, Dict[str, int]] = {}
 
     @staticmethod
@@ -811,16 +813,13 @@ class AudioTagProcessor:
         Returns:
             Stats dict with 'updated', 'skipped', 'no_file' counts
         """
-        if instance_name not in self.arr_instances:
+        if instance_name not in self.radarr_instances:
             logger.error(f"[audio_tags] Radarr instance '{instance_name}' not found")
             return {'updated': 0, 'skipped': 0, 'no_file': 0}
 
-        instance = self.arr_instances[instance_name]
-        if instance.service_type != 'radarr':
-            logger.error(f"[audio_tags] Instance '{instance_name}' is not a Radarr instance")
-            return {'updated': 0, 'skipped': 0, 'no_file': 0}
+        instance = self.radarr_instances[instance_name]
 
-        logger.info(f"[{instance_name}] Starting audio tag scan...")
+        logger.info(f"[{instance_name}] Starting Radarr audio tag scan...")
 
         # Build language -> tag_name mapping and normalize languages
         lang_to_tag: Dict[str, str] = {}
@@ -897,16 +896,13 @@ class AudioTagProcessor:
         Returns:
             Stats dict with 'updated', 'skipped', 'no_file' counts
         """
-        if instance_name not in self.arr_instances:
+        if instance_name not in self.sonarr_instances:
             logger.error(f"[audio_tags] Sonarr instance '{instance_name}' not found")
             return {'updated': 0, 'skipped': 0, 'no_file': 0}
 
-        instance = self.arr_instances[instance_name]
-        if instance.service_type != 'sonarr':
-            logger.error(f"[audio_tags] Instance '{instance_name}' is not a Sonarr instance")
-            return {'updated': 0, 'skipped': 0, 'no_file': 0}
+        instance = self.sonarr_instances[instance_name]
 
-        logger.info(f"[{instance_name}] Starting audio tag scan...")
+        logger.info(f"[{instance_name}] Starting Sonarr audio tag scan...")
 
         # Build language -> tag_name mapping
         lang_to_tag: Dict[str, str] = {}
