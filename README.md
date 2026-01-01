@@ -226,26 +226,27 @@ Tag media based on **actual audio tracks** in downloaded files, not just origina
 
 ### Setup
 
-Add to `config.yml`:
+Add `audio_tags` to your instance config in `config.yml`:
 ```yaml
-audio_tags:
-  enabled: true
-  scan_interval_hours: 24    # How often to scan (default: 24)
-  scan_on_startup: true      # Scan on startup (default: true)
+schedule:
+  interval_hours: 24
+  audio_scan_interval_hours: 24  # Optional: separate interval for audio scanning
 
-  radarr:
-    main:                    # Must match your radarr instance name
-      tags:
-        - language: de       # ISO code or full name
-          tag_name: german-audio
-        - language: en
-          tag_name: english-audio
+radarr:
+  main:
+    # ...existing config...
+    audio_tags:              # Add this section
+      - language: de         # ISO code or full name
+        tag_name: german-audio
+      - language: en
+        tag_name: english-audio
 
-  sonarr:
-    main:
-      tags:
-        - language: de
-          tag_name: german-audio
+sonarr:
+  main:
+    # ...existing config...
+    audio_tags:
+      - language: de
+        tag_name: german-audio
 ```
 
 ### How It Works

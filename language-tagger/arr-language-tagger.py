@@ -661,19 +661,19 @@ class AudioTagProcessor:
         'vi': 'vietnamese', 'vie': 'vietnamese', 'vietnamese': 'vietnamese',
     }
 
-    def __init__(self, arr_instances: List[ArrInstance], config: dict):
+    def __init__(self, arr_instances: List[ArrInstance], instance_configs: Dict[str, Dict[str, dict]]):
         """
         Initialize audio tag processor.
 
         Args:
             arr_instances: List of initialized ArrInstance objects
-            config: The audio_tags config section
+            instance_configs: Dict of {service_type: {instance_name: instance_config}}
+                              where instance_config contains 'audio_tags' list
         """
         # Store instances by service_type for lookup
         self.radarr_instances = {inst.name: inst for inst in arr_instances if inst.service_type == 'radarr'}
         self.sonarr_instances = {inst.name: inst for inst in arr_instances if inst.service_type == 'sonarr'}
-        self.config = config
-        self.enabled = config.get('enabled', False)
+        self.instance_configs = instance_configs
         self.dry_run = os.environ.get('DRY_RUN', 'false').lower() == 'true'
 
         # Tag ID cache per instance: {service_type_name: {tag_name: tag_id}}
@@ -974,10 +974,6 @@ class AudioTagProcessor:
 
     def run(self) -> None:
         """Run audio tag processing for all configured instances."""
-        if not self.enabled:
-            logger.debug("[audio_tags] Audio tagging is disabled")
-            return
-
         logger.info("="*80)
         logger.info("Audio Tag Processor - Starting scan")
         if self.dry_run:
@@ -985,21 +981,21 @@ class AudioTagProcessor:
         logger.info("="*80)
 
         # Process Radarr instances
-        radarr_config = self.config.get('radarr', {})
-        for instance_name, instance_config in radarr_config.items():
-            tags = instance_config.get('tags', [])
-            if tags:
-                stats = self.process_radarr_instance(instance_name, tags)
+        radarr_configs = self.instance_configs.get('radarr', {})
+        for instance_name, instance_config in radarr_configs.items():
+            audio_tags = instance_config.get('audio_tags', [])
+            if audio_tags:
+                stats = self.process_radarr_instance(instance_name, audio_tags)
                 logger.info(f"[{instance_name}] Audio tag scan complete: "
                           f"{stats['updated']} updated, {stats['skipped']} unchanged, "
                           f"{stats['no_file']} without files")
 
         # Process Sonarr instances
-        sonarr_config = self.config.get('sonarr', {})
-        for instance_name, instance_config in sonarr_config.items():
-            tags = instance_config.get('tags', [])
-            if tags:
-                stats = self.process_sonarr_instance(instance_name, tags)
+        sonarr_configs = self.instance_configs.get('sonarr', {})
+        for instance_name, instance_config in sonarr_configs.items():
+            audio_tags = instance_config.get('audio_tags', [])
+            if audio_tags:
+                stats = self.process_sonarr_instance(instance_name, audio_tags)
                 logger.info(f"[{instance_name}] Audio tag scan complete: "
                           f"{stats['updated']} updated, {stats['skipped']} unchanged, "
                           f"{stats['no_file']} without files")
@@ -1196,18 +1192,28 @@ class ArrLanguageTagger:
 
     def init_audio_tags(self) -> None:
         """Initialize audio tag processor from config (optional)."""
-        if 'audio_tags' not in self.config:
-            logger.info("Audio tagging disabled (not in config)")
-            return
+        # Check if any instance has audio_tags configured
+        instance_configs = {
+            'radarr': self.config.get('radarr', {}),
+            'sonarr': self.config.get('sonarr', {})
+        }
 
-        audio_config = self.config['audio_tags']
-        if not audio_config.get('enabled', False):
-            logger.info("Audio tagging disabled (enabled=false)")
+        has_audio_tags = False
+        for service_type, instances in instance_configs.items():
+            for instance_name, instance_config in instances.items():
+                if instance_config.get('audio_tags'):
+                    has_audio_tags = True
+                    break
+            if has_audio_tags:
+                break
+
+        if not has_audio_tags:
+            logger.info("Audio tagging disabled (no audio_tags in any instance)")
             return
 
         try:
             logger.info("Initializing audio tag processor...")
-            self.audio_tag_processor = AudioTagProcessor(self.instances, audio_config)
+            self.audio_tag_processor = AudioTagProcessor(self.instances, instance_configs)
             logger.info("Audio tag processor initialized")
         except Exception as e:
             logger.error(f"Failed to initialize audio tag processor: {e}")
@@ -1271,9 +1277,8 @@ class ArrLanguageTagger:
 
         # Schedule audio tag job (can have separate interval)
         if self.audio_tag_processor:
-            audio_config = self.config.get('audio_tags', {})
-            audio_interval = audio_config.get('scan_interval_hours', 24)
-            audio_on_startup = audio_config.get('scan_on_startup', True)
+            audio_interval = schedule_config.get('audio_scan_interval_hours', 24)
+            audio_on_startup = schedule_config.get('audio_scan_on_startup', True)
 
             if audio_interval != interval_hours:
                 # Only schedule separately if interval differs
