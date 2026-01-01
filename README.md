@@ -142,6 +142,15 @@ radarr:
       - en
 ```
 
+### Monitored Items Only
+
+To only process monitored items (skip unmonitored):
+```yaml
+radarr:
+  main:
+    only_monitored: true  # Default: false
+```
+
 ## Overseerr/Seerr Integration (Optional)
 
 Automatically set correct profiles on requests **before** they reach Radarr/Sonarr.
