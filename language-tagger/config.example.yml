@@ -73,6 +73,9 @@ radarr:
     search_cooldown_seconds: 60         # Don't search same item within 60s (default: 60)
     min_search_interval_seconds: 5      # Min time between ANY searches (default: 5)
 
+    # Monitoring Filter
+    only_monitored: false               # Only process monitored items (default: false)
+
     # Audio Track Tagging (OPTIONAL)
     # Tags media based on actual audio tracks in downloaded files.
     # Use case: Tag all movies with German audio, regardless of original language.
@@ -97,6 +100,7 @@ radarr:
   #   trigger_search_on_update: true
   #   search_cooldown_seconds: 60
   #   min_search_interval_seconds: 5
+  #   only_monitored: false
   #   audio_tags:
   #     - language: de
   #       tag_name: german-audio
@@ -121,6 +125,9 @@ sonarr:
     search_cooldown_seconds: 60         # Don't search same item within 60s (default: 60)
     min_search_interval_seconds: 5      # Min time between ANY searches (default: 5)
 
+    # Monitoring Filter
+    only_monitored: false               # Only process monitored items (default: false)
+
     # Audio Track Tagging (OPTIONAL)
     # Tags series based on actual audio tracks in downloaded episodes.
     # Series is tagged if ANY episode has the audio track.
@@ -142,6 +149,7 @@ sonarr:
   #   trigger_search_on_update: true
   #   search_cooldown_seconds: 60
   #   min_search_interval_seconds: 5
+  #   only_monitored: false
   #   audio_tags:
   #     - language: ja
   #       tag_name: japanese-audio

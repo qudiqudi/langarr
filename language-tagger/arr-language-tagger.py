@@ -134,6 +134,9 @@ class ArrInstance(APIClient):
         self.search_cooldown_seconds = config.get('search_cooldown_seconds', 60)
         self.min_search_interval_seconds = config.get('min_search_interval_seconds', 5)
 
+        # Only process monitored items
+        self.only_monitored = config.get('only_monitored', False)
+
         # Search tracking
         self.last_triggered_searches = {}  # {item_id: timestamp}
         self.last_any_search = 0
@@ -536,6 +539,8 @@ class ArrInstance(APIClient):
     def process_all_items(self) -> Dict[str, int]:
         """Process all items and update tags/profiles as needed."""
         logger.info(f"[{self.name}] Starting processing...")
+        if self.only_monitored:
+            logger.info(f"[{self.name}] Only processing monitored items")
 
         items = self.get_all_items()
 
@@ -545,11 +550,17 @@ class ArrInstance(APIClient):
 
         updated_count = 0
         skipped_count = 0
+        unmonitored_count = 0
 
         for idx, item in enumerate(items, 1):
             # Progress indicator for large libraries
             if idx % 100 == 0:
                 logger.info(f"[{self.name}] Progress: {idx}/{len(items)} items processed")
+
+            # Skip unmonitored items if configured
+            if self.only_monitored and not item.get('monitored', True):
+                unmonitored_count += 1
+                continue
 
             prefer_dub = self.should_prefer_dub(item)
 
@@ -557,6 +568,9 @@ class ArrInstance(APIClient):
                 updated_count += 1
             else:
                 skipped_count += 1
+
+        if unmonitored_count > 0:
+            logger.info(f"[{self.name}] Skipped {unmonitored_count} unmonitored items")
 
         return {
             'updated': updated_count,
