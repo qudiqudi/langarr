@@ -21,6 +21,7 @@ Perfect for multilingual libraries where you want original audio for some langua
 1. Creates two quality profiles: `Original Preferred` and `Dub Preferred`
 2. Automatically assigns profiles based on original language
 3. Tags foreign content with `prefer-dub` for easy filtering
+4. (Optional) Tags media based on actual audio tracks present in files
 
 ## Installation
 
@@ -216,6 +217,53 @@ User requests → Webhook fires → Langarr updates profile in Radarr
 2. **Langarr** assigns profiles based on original language
 3. **Runs every 24 hours** to tag new content
 4. **(Optional) Webhook** for instant updates on new requests
+
+## Audio Track Tagging (Optional)
+
+Tag media based on **actual audio tracks** in downloaded files, not just original language metadata.
+
+**Use case:** Tag all movies/shows that have a German audio track, regardless of original language. Useful for filtering in Plex/Jellyfin.
+
+### Setup
+
+Add to `config.yml`:
+```yaml
+audio_tags:
+  enabled: true
+  scan_interval_hours: 24    # How often to scan (default: 24)
+  scan_on_startup: true      # Scan on startup (default: true)
+
+  radarr:
+    main:                    # Must match your radarr instance name
+      tags:
+        - language: de       # ISO code or full name
+          tag_name: german-audio
+        - language: en
+          tag_name: english-audio
+
+  sonarr:
+    main:
+      tags:
+        - language: de
+          tag_name: german-audio
+```
+
+### How It Works
+
+1. Fetches `mediaInfo.audioLanguages` from each downloaded file
+2. Parses languages (handles "English / German" format)
+3. Adds tags when language is detected
+4. Removes tags if language no longer present (file replaced)
+
+For Sonarr: Tags the series if **any** episode has the audio track.
+
+### Difference from Profile Assignment
+
+| Feature | Profile Assignment | Audio Tagging |
+|---------|-------------------|---------------|
+| Data source | TMDB original language | Actual file mediaInfo |
+| When | Before/during download | After download |
+| Purpose | Quality profile selection | Filtering/organization |
 
 ## Troubleshooting
 
