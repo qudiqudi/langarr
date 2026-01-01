@@ -116,3 +116,40 @@ sonarr:
   #   trigger_search_on_update: true
   #   search_cooldown_seconds: 60
   #   min_search_interval_seconds: 5
+
+# ============================================================================
+# AUDIO TRACK TAGGING (OPTIONAL - tag media based on actual audio tracks)
+# ============================================================================
+# Scans downloaded files and adds tags based on detected audio languages.
+# Unlike profile assignment (which uses original language metadata), this
+# inspects the actual mediaInfo of imported files.
+#
+# Use case: Tag all movies/shows that have a German audio track, regardless
+# of the content's original language.
+audio_tags:
+  enabled: false              # Set to true to enable audio track tagging
+  scan_interval_hours: 24     # How often to scan for new files (default: 24)
+  scan_on_startup: true       # Scan immediately on startup (default: true)
+
+  # Language-to-tag mappings for Radarr
+  # Scans movieFile.mediaInfo.audioLanguages for each language
+  radarr:
+    main:                     # Must match instance name in radarr section above
+      tags:
+        - language: de        # Language to detect (ISO 639-1 code or full name)
+          tag_name: german-audio
+        - language: en
+          tag_name: english-audio
+        # Add more language/tag pairs as needed
+        # - language: fr
+        #   tag_name: french-audio
+
+  # Language-to-tag mappings for Sonarr
+  # Scans episodeFile.mediaInfo.audioLanguages for each episode
+  sonarr:
+    main:                     # Must match instance name in sonarr section above
+      tags:
+        - language: de
+          tag_name: german-audio
+        - language: en
+          tag_name: english-audio
