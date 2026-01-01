@@ -118,6 +118,8 @@ Example config structure at `language-tagger/config.yml`
 schedule:
   interval_hours: 24
   run_on_startup: true
+  audio_scan_interval_hours: 24   # Optional: separate interval for audio tagging
+  audio_scan_on_startup: true
 
 webhook:
   enabled: true
@@ -148,24 +150,11 @@ radarr:
     min_search_interval_seconds: 5
 
 sonarr:
-  main:  # Same structure as radarr
-
-audio_tags:
-  enabled: true
-  scan_interval_hours: 24
-  scan_on_startup: true
-  radarr:
-    main:
-      tags:
-        - language: de
-          tag_name: german-audio
-        - language: en
-          tag_name: english-audio
-  sonarr:
-    main:
-      tags:
-        - language: de
-          tag_name: german-audio
+  main:
+    # Same structure as radarr, plus optional audio_tags:
+    audio_tags:
+      - language: de
+        tag_name: german-audio
 ```
 
 ### Environment Variable Patterns
@@ -260,6 +249,17 @@ Separate from profile assignment, audio tagging inspects downloaded files:
 3. Normalizes language names using `LANGUAGE_ALIASES` mapping
 4. Adds configured tags (e.g., `german-audio`) if language is detected
 5. Removes tags if language is no longer present (file replaced)
+
+**Configuration:** Add `audio_tags` list to any radarr/sonarr instance config:
+```yaml
+radarr:
+  main:
+    audio_tags:
+      - language: de
+        tag_name: german-audio
+```
+
+**Schedule settings** in `schedule` section: `audio_scan_interval_hours`, `audio_scan_on_startup`
 
 **Use case:** Tag all content that has German audio, regardless of original language. Useful for filtering in Plex/Jellyfin.
 
