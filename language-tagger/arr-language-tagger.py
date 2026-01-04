@@ -694,44 +694,87 @@ class AudioTagProcessor:
         self.tag_ids: Dict[str, Dict[str, int]] = {}
 
     @staticmethod
-    def parse_audio_languages(media_info: Optional[Dict]) -> Set[str]:
+    def _normalize_language(lang: str) -> str:
+        """
+        Normalize a single language string to canonical name.
+
+        Args:
+            lang: Language string to normalize (e.g., "eng", "German", "en")
+
+        Returns:
+            Canonical language name (e.g., "english", "german")
+        """
+        lang_lower = lang.lower().strip()
+        if not lang_lower:
+            return ''
+
+        # Try exact match first
+        canonical = AudioTagProcessor.LANGUAGE_ALIASES.get(lang_lower)
+        if canonical:
+            return canonical
+
+        # Try partial matching for names like "english (us)"
+        for alias, canonical_name in AudioTagProcessor.LANGUAGE_ALIASES.items():
+            if alias in lang_lower or lang_lower in alias:
+                return canonical_name
+
+        # Unknown language - return as-is (lowercase)
+        return lang_lower
+
+    @staticmethod
+    def parse_audio_languages(media_info: Optional[Dict], languages_fallback: Optional[List[Dict]] = None) -> Set[str]:
         """
         Parse audioLanguages string from mediaInfo into normalized language set.
 
         Radarr/Sonarr return audioLanguages as a slash-separated string like:
         "English", "English / German", "Japanese/English"
 
+        If mediaInfo.audioLanguages is empty, falls back to the languages field
+        which Sonarr/Radarr parse from the release name.
+
+        Priority: mediaInfo.audioLanguages is always preferred over the fallback field,
+        as it contains actual audio track information from the file's metadata.
+
+        Args:
+            media_info: The mediaInfo dict from the file
+            languages_fallback: Optional list of language dicts (e.g., [{'id': 4, 'name': 'German'}])
+                               Used as fallback when mediaInfo.audioLanguages is empty.
+                               This field is parsed from release filenames.
+
         Returns:
             Set of normalized canonical language names (e.g., {'english', 'german'})
         """
-        if not media_info:
-            return set()
-
-        audio_langs = media_info.get('audioLanguages', '')
-        if not audio_langs:
-            return set()
-
-        # Split by slash (handle both "English/German" and "English / German")
-        raw_langs = [lang.strip().lower() for lang in audio_langs.split('/')]
-
-        # Normalize to canonical names
         normalized = set()
-        for lang in raw_langs:
-            if not lang:
-                continue
-            # Check if it's a known alias
-            canonical = AudioTagProcessor.LANGUAGE_ALIASES.get(lang)
-            if canonical:
-                normalized.add(canonical)
+
+        # Try mediaInfo.audioLanguages first (most accurate - from file metadata)
+        audio_langs = ''
+        if media_info:
+            audio_langs = media_info.get('audioLanguages', '')
+
+        if audio_langs:
+            # Split by slash (handle both "English/German" and "English / German")
+            raw_langs = [lang.strip() for lang in audio_langs.split('/')]
+
+            for lang in raw_langs:
+                if not lang:
+                    continue
+                canonical = AudioTagProcessor._normalize_language(lang)
+                if canonical:
+                    normalized.add(canonical)
+
+        # Fallback to languages field if mediaInfo.audioLanguages was empty
+        if not normalized and languages_fallback:
+            if not isinstance(languages_fallback, list):
+                logger.warning(f"Expected list for languages_fallback, got {type(languages_fallback).__name__}")
             else:
-                # Try partial matching for names like "english (us)"
-                for alias, canonical_name in AudioTagProcessor.LANGUAGE_ALIASES.items():
-                    if alias in lang or lang in alias:
-                        normalized.add(canonical_name)
-                        break
-                else:
-                    # Unknown language - keep as-is (lowercase)
-                    normalized.add(lang)
+                logger.debug("Using fallback languages field (mediaInfo.audioLanguages was empty)")
+                for lang_obj in languages_fallback:
+                    if isinstance(lang_obj, dict):
+                        lang_name = lang_obj.get('name', '').strip()
+                        if lang_name:
+                            canonical = AudioTagProcessor._normalize_language(lang_name)
+                            if canonical:
+                                normalized.add(canonical)
 
         return normalized
 
@@ -842,7 +885,7 @@ class AudioTagProcessor:
             tag_name = mapping.get('tag_name', '')
             if lang and tag_name:
                 # Normalize language to canonical form
-                canonical = self.LANGUAGE_ALIASES.get(lang, lang)
+                canonical = self._normalize_language(lang)
                 lang_to_tag[canonical] = tag_name
 
         if not lang_to_tag:
@@ -874,7 +917,8 @@ class AudioTagProcessor:
                 continue
 
             media_info = movie_file.get('mediaInfo')
-            detected_langs = self.parse_audio_languages(media_info)
+            languages_fallback = movie_file.get('languages')
+            detected_langs = self.parse_audio_languages(media_info, languages_fallback)
 
             # Determine which tags should be present
             tags_to_add: Set[int] = set()
@@ -901,7 +945,7 @@ class AudioTagProcessor:
         """
         Process a single Sonarr instance for audio tagging.
 
-        For Sonarr, we check if ANY episode has the language and tag the series.
+        For Sonarr, we check if ALL episodes have the language before tagging the series.
 
         Args:
             instance_name: Name of the instance (must match config)
@@ -924,7 +968,7 @@ class AudioTagProcessor:
             lang = mapping.get('language', '').lower()
             tag_name = mapping.get('tag_name', '')
             if lang and tag_name:
-                canonical = self.LANGUAGE_ALIASES.get(lang, lang)
+                canonical = self._normalize_language(lang)
                 lang_to_tag[canonical] = tag_name
 
         if not lang_to_tag:
@@ -958,12 +1002,36 @@ class AudioTagProcessor:
                 stats['no_file'] += 1
                 continue
 
-            # Collect all languages across all episodes
-            all_detected_langs: Set[str] = set()
+            # Collect languages that are present in ALL episodes (intersection)
+            # Only tag the series if every episode with language data has the language
+            # Episodes with no detected languages are skipped to avoid wiping the intersection
+            series_title = series.get('title', 'Unknown')
+            common_langs: Optional[Set[str]] = None
+            episodes_with_langs = 0
             for ep_file in episode_files:
                 media_info = ep_file.get('mediaInfo')
-                detected = self.parse_audio_languages(media_info)
-                all_detected_langs.update(detected)
+                languages_fallback = ep_file.get('languages')
+                detected = self.parse_audio_languages(media_info, languages_fallback)
+
+                # Skip episodes with no detected languages (don't let them wipe intersection)
+                if not detected:
+                    ep_file_id = ep_file.get('id', 'unknown')
+                    logger.debug(f"[{instance_name}] No audio languages detected for episode file {ep_file_id} in series '{series_title}', skipping from intersection")
+                    continue
+
+                episodes_with_langs += 1
+                if common_langs is None:
+                    common_langs = detected
+                else:
+                    common_langs &= detected  # Intersection
+
+            # If no episodes had language data, skip this series
+            if common_langs is None:
+                logger.debug(f"[{instance_name}] No episodes with language data for series '{series_title}' ({len(episode_files)} files), skipping")
+                stats['skipped'] += 1
+                continue
+
+            all_detected_langs = common_langs
 
             # Determine which tags should be present
             tags_to_add: Set[int] = set()

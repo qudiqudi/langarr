@@ -261,11 +261,12 @@ sonarr:
 ### How It Works
 
 1. Fetches `mediaInfo.audioLanguages` from each downloaded file
-2. Parses languages (handles "English / German" format)
-3. Adds tags when language is detected
-4. Removes tags if language no longer present (file replaced)
+2. Falls back to `languages` field (parsed from release name) if mediaInfo is empty
+3. Parses languages (handles "English / German" format)
+4. Adds tags when language is detected
+5. Removes tags if language no longer present (file replaced)
 
-For Sonarr: Tags the series if **any** episode has the audio track.
+For Sonarr: Tags the series only if **all** episodes have the audio track.
 
 ### Difference from Profile Assignment
 

@@ -109,7 +109,7 @@ Example config structure at `language-tagger/config.yml`
 - Parses `mediaInfo.audioLanguages` from Radarr/Sonarr API (slash-separated string like "English / German")
 - Normalizes language names (handles ISO codes, full names, variations)
 - Adds/removes tags based on detected audio tracks
-- For Sonarr: checks all episode files, tags series if ANY episode has the language
+- For Sonarr: checks all episode files, tags series only if ALL episodes have the language
 - Runs on configurable schedule (default: every 24 hours, same as profile sync)
 
 ### Configuration Structure
@@ -246,10 +246,11 @@ Without webhook: profiles updated every 24 hours (still works, just slower).
 Separate from profile assignment, audio tagging inspects downloaded files:
 
 1. Fetches `movieFile.mediaInfo.audioLanguages` (Radarr) or `episodeFile.mediaInfo` (Sonarr)
-2. Parses slash-separated language string (e.g., "English / German")
-3. Normalizes language names using `LANGUAGE_ALIASES` mapping
-4. Adds configured tags (e.g., `german-audio`) if language is detected
-5. Removes tags if language is no longer present (file replaced)
+2. Falls back to `languages` field (parsed from release name) if mediaInfo is empty
+3. Parses slash-separated language string (e.g., "English / German")
+4. Normalizes language names using `LANGUAGE_ALIASES` mapping
+5. Adds configured tags (e.g., `german-audio`) if language is detected
+6. Removes tags if language is no longer present (file replaced)
 
 **Configuration:** Add `audio_tags` list to any radarr/sonarr instance config:
 ```yaml
