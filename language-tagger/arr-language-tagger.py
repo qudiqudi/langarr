@@ -789,9 +789,12 @@ class AudioTagProcessor:
         Returns:
             Dict mapping tag_name -> tag_id
         """
-        if instance.name in self.tag_ids:
+        # Cache key must include service_type to avoid collisions between
+        # Radarr and Sonarr instances with the same name
+        cache_key = f"{instance.service_type}_{instance.name}"
+        if cache_key in self.tag_ids:
             # Check if we already have all needed tags cached
-            cached = self.tag_ids[instance.name]
+            cached = self.tag_ids[cache_key]
             if all(name in cached for name in tag_names):
                 return cached
 
@@ -812,7 +815,7 @@ class AudioTagProcessor:
                     logger.info(f"[{instance.name}] Created tag '{tag_name}' -> ID {new_tag['id']}")
 
         # Cache the tag IDs
-        self.tag_ids[instance.name] = tag_map
+        self.tag_ids[cache_key] = tag_map
         return tag_map
 
     def update_item_tags(self, instance: ArrInstance, item: Dict, tags_to_add: Set[int], tags_to_remove: Set[int]) -> bool:
