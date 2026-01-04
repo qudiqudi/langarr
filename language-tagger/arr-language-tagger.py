@@ -764,14 +764,17 @@ class AudioTagProcessor:
 
         # Fallback to languages field if mediaInfo.audioLanguages was empty
         if not normalized and languages_fallback:
-            logger.debug(f"Using fallback languages field (mediaInfo.audioLanguages was empty)")
-            for lang_obj in languages_fallback:
-                if isinstance(lang_obj, dict):
-                    lang_name = lang_obj.get('name', '').strip()
-                    if lang_name:
-                        canonical = AudioTagProcessor._normalize_language(lang_name)
-                        if canonical:
-                            normalized.add(canonical)
+            if not isinstance(languages_fallback, list):
+                logger.warning(f"Expected list for languages_fallback, got {type(languages_fallback).__name__}")
+            else:
+                logger.debug("Using fallback languages field (mediaInfo.audioLanguages was empty)")
+                for lang_obj in languages_fallback:
+                    if isinstance(lang_obj, dict):
+                        lang_name = lang_obj.get('name', '').strip()
+                        if lang_name:
+                            canonical = AudioTagProcessor._normalize_language(lang_name)
+                            if canonical:
+                                normalized.add(canonical)
 
         return normalized
 
@@ -1018,7 +1021,14 @@ class AudioTagProcessor:
                 else:
                     common_langs &= detected  # Intersection
 
-            all_detected_langs = common_langs or set()
+            # Safety check: common_langs should never be None here since episode_files is non-empty
+            # but handle it defensively to avoid removing all tags if something unexpected happens
+            if common_langs is None:
+                logger.warning(f"[{instance_name}] Unexpected: common_langs is None for series '{series_title}' with {len(episode_files)} files, skipping")
+                stats['skipped'] += 1
+                continue
+
+            all_detected_langs = common_langs
 
             # Determine which tags should be present
             tags_to_add: Set[int] = set()
