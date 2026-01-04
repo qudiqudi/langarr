@@ -885,7 +885,7 @@ class AudioTagProcessor:
             tag_name = mapping.get('tag_name', '')
             if lang and tag_name:
                 # Normalize language to canonical form
-                canonical = self.LANGUAGE_ALIASES.get(lang, lang)
+                canonical = self._normalize_language(lang)
                 lang_to_tag[canonical] = tag_name
 
         if not lang_to_tag:
@@ -968,7 +968,7 @@ class AudioTagProcessor:
             lang = mapping.get('language', '').lower()
             tag_name = mapping.get('tag_name', '')
             if lang and tag_name:
-                canonical = self.LANGUAGE_ALIASES.get(lang, lang)
+                canonical = self._normalize_language(lang)
                 lang_to_tag[canonical] = tag_name
 
         if not lang_to_tag:
@@ -1003,28 +1003,31 @@ class AudioTagProcessor:
                 continue
 
             # Collect languages that are present in ALL episodes (intersection)
-            # Only tag the series if every episode has the language
+            # Only tag the series if every episode with language data has the language
+            # Episodes with no detected languages are skipped to avoid wiping the intersection
             series_title = series.get('title', 'Unknown')
             common_langs: Optional[Set[str]] = None
+            episodes_with_langs = 0
             for ep_file in episode_files:
                 media_info = ep_file.get('mediaInfo')
                 languages_fallback = ep_file.get('languages')
                 detected = self.parse_audio_languages(media_info, languages_fallback)
 
-                # Log when an episode has no detected languages
+                # Skip episodes with no detected languages (don't let them wipe intersection)
                 if not detected:
                     ep_file_id = ep_file.get('id', 'unknown')
-                    logger.debug(f"[{instance_name}] No audio languages detected for episode file {ep_file_id} in series '{series_title}'")
+                    logger.debug(f"[{instance_name}] No audio languages detected for episode file {ep_file_id} in series '{series_title}', skipping from intersection")
+                    continue
 
+                episodes_with_langs += 1
                 if common_langs is None:
                     common_langs = detected
                 else:
                     common_langs &= detected  # Intersection
 
-            # Safety check: common_langs should never be None here since episode_files is non-empty
-            # but handle it defensively to avoid removing all tags if something unexpected happens
+            # If no episodes had language data, skip this series
             if common_langs is None:
-                logger.warning(f"[{instance_name}] Unexpected: common_langs is None for series '{series_title}' with {len(episode_files)} files, skipping")
+                logger.debug(f"[{instance_name}] No episodes with language data for series '{series_title}' ({len(episode_files)} files), skipping")
                 stats['skipped'] += 1
                 continue
 
