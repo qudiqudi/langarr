@@ -694,44 +694,70 @@ class AudioTagProcessor:
         self.tag_ids: Dict[str, Dict[str, int]] = {}
 
     @staticmethod
-    def parse_audio_languages(media_info: Optional[Dict]) -> Set[str]:
+    def parse_audio_languages(media_info: Optional[Dict], languages_fallback: Optional[List[Dict]] = None) -> Set[str]:
         """
         Parse audioLanguages string from mediaInfo into normalized language set.
 
         Radarr/Sonarr return audioLanguages as a slash-separated string like:
         "English", "English / German", "Japanese/English"
 
+        If mediaInfo.audioLanguages is empty, falls back to the languages field
+        which Sonarr/Radarr parse from the release name.
+
+        Args:
+            media_info: The mediaInfo dict from the file
+            languages_fallback: Optional list of language dicts (e.g., [{'id': 4, 'name': 'German'}])
+                               Used as fallback when mediaInfo.audioLanguages is empty
+
         Returns:
             Set of normalized canonical language names (e.g., {'english', 'german'})
         """
-        if not media_info:
-            return set()
-
-        audio_langs = media_info.get('audioLanguages', '')
-        if not audio_langs:
-            return set()
-
-        # Split by slash (handle both "English/German" and "English / German")
-        raw_langs = [lang.strip().lower() for lang in audio_langs.split('/')]
-
-        # Normalize to canonical names
         normalized = set()
-        for lang in raw_langs:
-            if not lang:
-                continue
-            # Check if it's a known alias
-            canonical = AudioTagProcessor.LANGUAGE_ALIASES.get(lang)
-            if canonical:
-                normalized.add(canonical)
-            else:
-                # Try partial matching for names like "english (us)"
-                for alias, canonical_name in AudioTagProcessor.LANGUAGE_ALIASES.items():
-                    if alias in lang or lang in alias:
-                        normalized.add(canonical_name)
-                        break
+
+        # Try mediaInfo.audioLanguages first (most accurate - from file metadata)
+        audio_langs = ''
+        if media_info:
+            audio_langs = media_info.get('audioLanguages', '')
+
+        if audio_langs:
+            # Split by slash (handle both "English/German" and "English / German")
+            raw_langs = [lang.strip().lower() for lang in audio_langs.split('/')]
+
+            for lang in raw_langs:
+                if not lang:
+                    continue
+                # Check if it's a known alias
+                canonical = AudioTagProcessor.LANGUAGE_ALIASES.get(lang)
+                if canonical:
+                    normalized.add(canonical)
                 else:
-                    # Unknown language - keep as-is (lowercase)
-                    normalized.add(lang)
+                    # Try partial matching for names like "english (us)"
+                    for alias, canonical_name in AudioTagProcessor.LANGUAGE_ALIASES.items():
+                        if alias in lang or lang in alias:
+                            normalized.add(canonical_name)
+                            break
+                    else:
+                        # Unknown language - keep as-is (lowercase)
+                        normalized.add(lang)
+
+        # Fallback to languages field if mediaInfo.audioLanguages was empty
+        if not normalized and languages_fallback:
+            for lang_obj in languages_fallback:
+                if isinstance(lang_obj, dict):
+                    lang_name = lang_obj.get('name', '').lower().strip()
+                    if lang_name:
+                        # Normalize using aliases
+                        canonical = AudioTagProcessor.LANGUAGE_ALIASES.get(lang_name)
+                        if canonical:
+                            normalized.add(canonical)
+                        else:
+                            # Try partial matching
+                            for alias, canonical_name in AudioTagProcessor.LANGUAGE_ALIASES.items():
+                                if alias in lang_name or lang_name in alias:
+                                    normalized.add(canonical_name)
+                                    break
+                            else:
+                                normalized.add(lang_name)
 
         return normalized
 
@@ -874,7 +900,8 @@ class AudioTagProcessor:
                 continue
 
             media_info = movie_file.get('mediaInfo')
-            detected_langs = self.parse_audio_languages(media_info)
+            languages_fallback = movie_file.get('languages')
+            detected_langs = self.parse_audio_languages(media_info, languages_fallback)
 
             # Determine which tags should be present
             tags_to_add: Set[int] = set()
@@ -901,7 +928,7 @@ class AudioTagProcessor:
         """
         Process a single Sonarr instance for audio tagging.
 
-        For Sonarr, we check if ANY episode has the language and tag the series.
+        For Sonarr, we check if ALL episodes have the language before tagging the series.
 
         Args:
             instance_name: Name of the instance (must match config)
@@ -958,12 +985,20 @@ class AudioTagProcessor:
                 stats['no_file'] += 1
                 continue
 
-            # Collect all languages across all episodes
-            all_detected_langs: Set[str] = set()
+            # Collect languages that are present in ALL episodes (intersection)
+            # Only tag the series if every episode has the language
+            common_langs: Optional[Set[str]] = None
             for ep_file in episode_files:
                 media_info = ep_file.get('mediaInfo')
-                detected = self.parse_audio_languages(media_info)
-                all_detected_langs.update(detected)
+                languages_fallback = ep_file.get('languages')
+                detected = self.parse_audio_languages(media_info, languages_fallback)
+
+                if common_langs is None:
+                    common_langs = detected
+                else:
+                    common_langs &= detected  # Intersection
+
+            all_detected_langs = common_langs or set()
 
             # Determine which tags should be present
             tags_to_add: Set[int] = set()
