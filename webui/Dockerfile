@@ -1,8 +1,5 @@
 FROM node:20-alpine
 
-# Build argument for environment (set by GitHub Actions)
-ARG NODE_ENV=production
-
 WORKDIR /app
 
 # Install build dependencies for better-sqlite3
@@ -11,7 +8,7 @@ RUN apk add --no-cache python3 make g++
 # Copy package files
 COPY package*.json ./
 
-# Install dependencies
+# Install ALL dependencies including devDependencies (needed for build)
 RUN npm ci
 
 # Copy source code
@@ -25,14 +22,13 @@ RUN npm run build
 RUN npx tsc -p tsconfig.server.json
 
 # Cleanup dev dependencies to reduce image size
-# (Optional: might break build if some runtime deps were in dev, but standard practice)
 RUN npm prune --production
 
 # Expose port
 EXPOSE 3000
 
-# Environment variables (NODE_ENV from build arg)
-ENV NODE_ENV=${NODE_ENV}
+# Environment variables (default to production)
+ENV NODE_ENV=production
 ENV PORT=3000
 
 # Start server
