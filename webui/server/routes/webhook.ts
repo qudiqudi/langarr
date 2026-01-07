@@ -1,7 +1,9 @@
 import express from 'express';
 import { getRepository } from '../datasource';
 import { Settings } from '../entity/Settings';
+import { SyncLog } from '../entity/SyncLog';
 import { getScheduler } from '../index';
+import { broadcastLogEntry } from './logs';
 
 const router = express.Router();
 
@@ -27,6 +29,16 @@ router.post('/', async (req, res) => {
         if (!media) {
             // Test notification - update last test timestamp
             await settingsRepo.update(1, { lastWebhookTestAt: new Date() });
+
+            // Log test webhook
+            const logRepo = getRepository(SyncLog);
+            const entry = new SyncLog();
+            entry.level = 'info';
+            entry.source = 'webhook';
+            entry.message = 'Webhook test received successfully';
+            const savedEntry = await logRepo.save(entry);
+            broadcastLogEntry(savedEntry);
+
             return res.json({ status: 'ok', message: 'Test received' });
         }
 
