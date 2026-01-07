@@ -7,7 +7,7 @@ services:
     volumes:
       - ./config:/config  # SQLite database storage
     ports:
-      - "3000:3000"        # WebUI port
+      - "8383:8383"        # WebUI port
       # - "5678:5678"      # Webhook port (optional)
     environment:
       - TZ=Etc/UTC

@@ -145,7 +145,7 @@ Configuration is stored in SQLite database at `/config/langarr.db`:
 - Sync logs and history
 
 **First-run setup:**
-1. Navigate to `http://localhost:3000`
+1. Navigate to `http://localhost:8383`
 2. Redirects to `/setup` wizard
 3. Create admin user
 4. Configure first Radarr/Sonarr instance
@@ -195,7 +195,7 @@ The image tag determines runtime behavior - no need to set `NODE_ENV` manually.
 ### Environment Variables
 
 Optional configuration via environment:
-- `PORT` - Server port (default: 3000)
+- `PORT` - Server port (default: 8383)
 - `TZ` - Timezone (default: Etc/UTC)
 
 ### Common Development Tasks

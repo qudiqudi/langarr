@@ -4,6 +4,13 @@ import Head from 'next/head';
 import toast from 'react-hot-toast';
 import InstanceModal from '@/components/Settings/InstanceModal';
 
+interface Instance {
+    id: number;
+    name: string;
+    baseUrl: string;
+    enabled: boolean;
+}
+
 export default function SetupPage() {
     const [step, setStep] = useState(1);
     const [loading, setLoading] = useState(false);
@@ -15,6 +22,8 @@ export default function SetupPage() {
     });
     const [isInstanceModalOpen, setIsInstanceModalOpen] = useState(false);
     const [instanceModalType, setInstanceModalType] = useState<'radarr' | 'sonarr'>('radarr');
+    const [radarrInstances, setRadarrInstances] = useState<Instance[]>([]);
+    const [sonarrInstances, setSonarrInstances] = useState<Instance[]>([]);
 
     // Check authentication first, then setup status
     useEffect(() => {
@@ -43,9 +52,31 @@ export default function SetupPage() {
                 return;
             }
             setCheckingSetup(false);
+            fetchInstances();
         };
         checkAuthAndSetup();
     }, []);
+
+    const fetchInstances = async () => {
+        try {
+            const [radarrRes, sonarrRes] = await Promise.all([
+                fetch('/api/v1/radarr'),
+                fetch('/api/v1/sonarr')
+            ]);
+
+            if (radarrRes.ok) {
+                const radarrData = await radarrRes.json();
+                setRadarrInstances(radarrData);
+            }
+
+            if (sonarrRes.ok) {
+                const sonarrData = await sonarrRes.json();
+                setSonarrInstances(sonarrData);
+            }
+        } catch (err) {
+            console.error('Failed to fetch instances', err);
+        }
+    };
 
     const validateStep1 = (): boolean => {
         const newErrors: { syncInterval?: string } = {};
@@ -203,7 +234,23 @@ export default function SetupPage() {
                                                 + Add Instance
                                             </button>
                                         </div>
-                                        <p className="text-xs text-gray-500">Configure Radarr to manage your movie library</p>
+                                        <p className="text-xs text-gray-500 mb-2">Configure Radarr to manage your movie library</p>
+
+                                        {radarrInstances.length > 0 && (
+                                            <div className="mt-2 space-y-2">
+                                                {radarrInstances.map((instance) => (
+                                                    <div key={instance.id} className="bg-gray-700 rounded px-3 py-2 text-sm">
+                                                        <div className="flex items-center justify-between">
+                                                            <span className="text-white font-medium">{instance.name}</span>
+                                                            <span className={`text-xs ${instance.enabled ? 'text-green-400' : 'text-gray-400'}`}>
+                                                                {instance.enabled ? 'Active' : 'Inactive'}
+                                                            </span>
+                                                        </div>
+                                                        <span className="text-xs text-gray-400">{instance.baseUrl}</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
                                     </div>
 
                                     <div>
@@ -216,7 +263,23 @@ export default function SetupPage() {
                                                 + Add Instance
                                             </button>
                                         </div>
-                                        <p className="text-xs text-gray-500">Configure Sonarr to manage your TV library</p>
+                                        <p className="text-xs text-gray-500 mb-2">Configure Sonarr to manage your TV library</p>
+
+                                        {sonarrInstances.length > 0 && (
+                                            <div className="mt-2 space-y-2">
+                                                {sonarrInstances.map((instance) => (
+                                                    <div key={instance.id} className="bg-gray-700 rounded px-3 py-2 text-sm">
+                                                        <div className="flex items-center justify-between">
+                                                            <span className="text-white font-medium">{instance.name}</span>
+                                                            <span className={`text-xs ${instance.enabled ? 'text-green-400' : 'text-gray-400'}`}>
+                                                                {instance.enabled ? 'Active' : 'Inactive'}
+                                                            </span>
+                                                        </div>
+                                                        <span className="text-xs text-gray-400">{instance.baseUrl}</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                             </div>
@@ -271,8 +334,7 @@ export default function SetupPage() {
                             onClose={() => setIsInstanceModalOpen(false)}
                             onSave={() => {
                                 setIsInstanceModalOpen(false);
-                                // Refresh instances list (this is a simplified version - in real app would refetch from API)
-                                toast.success('Instance saved');
+                                fetchInstances();
                             }}
                             instance={null}
                             type={instanceModalType}

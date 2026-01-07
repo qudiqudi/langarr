@@ -25,11 +25,11 @@ RUN npx tsc -p tsconfig.server.json
 RUN npm prune --production
 
 # Expose port
-EXPOSE 3000
+EXPOSE 8383
 
 # Environment variables (default to production)
 ENV NODE_ENV=production
-ENV PORT=3000
+ENV PORT=8383
 
 # Start server
 CMD ["node", "dist/index.js"]

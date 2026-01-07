@@ -310,7 +310,11 @@ export default function InstanceModal({ isOpen, onClose, onSave, instance, type 
                                                 <div className="flex items-center justify-between">
                                                     <div>
                                                         <label className="block text-sm font-medium text-gray-300">Enable Audio Tagging</label>
-                                                        <p className="text-xs text-gray-500 mt-1">Use global audio tag rules (configure in Settings)</p>
+                                                        <p className="text-xs text-gray-500 mt-1">
+                                                            Automatically tag items based on audio tracks in downloaded files.
+                                                            <br />
+                                                            Useful for identifying dubs vs original audio after download.
+                                                        </p>
                                                     </div>
                                                     <button
                                                         type="button"

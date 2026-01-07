@@ -258,7 +258,7 @@ export default function OverseerrSettings() {
                                     </label>
                                     <input
                                         type="text"
-                                        placeholder="http://langarr:3000"
+                                        placeholder="http://langarr:8383"
                                         value={baseUrlInput}
                                         onChange={(e) => setBaseUrlInput(e.target.value)}
                                         onBlur={() => {
@@ -270,6 +270,12 @@ export default function OverseerrSettings() {
                                         }}
                                         className="w-full rounded-md border-gray-700 bg-gray-800 text-white text-sm p-2.5 focus:border-blue-500 focus:ring-blue-500"
                                     />
+                                    <div className="mt-2 text-xs text-gray-500 space-y-1">
+                                        <p className="font-medium text-gray-400">Common configurations:</p>
+                                        <p>Same Docker network: <code className="bg-gray-800 px-1.5 py-0.5 rounded">http://langarr:8383</code></p>
+                                        <p>Same host machine: <code className="bg-gray-800 px-1.5 py-0.5 rounded">http://localhost:&lt;port&gt;</code></p>
+                                        <p>Different machine: <code className="bg-gray-800 px-1.5 py-0.5 rounded">http://&lt;server-ip&gt;:&lt;port&gt;</code></p>
+                                    </div>
                                 </div>
 
                                 {webhookUrl ? (
@@ -301,10 +307,11 @@ export default function OverseerrSettings() {
                                         <div className="rounded-md bg-gray-800/50 p-4 text-sm text-gray-300">
                                             <p className="font-medium mb-2">Setup in Overseerr:</p>
                                             <ol className="list-decimal list-inside space-y-1 text-gray-400">
-                                                <li>Go to Settings → Notifications → Webhook</li>
-                                                <li>Enable and paste the URL above</li>
+                                                <li>Verify the Langarr URL above is correct for your network setup</li>
+                                                <li>Go to Settings → Notifications → Webhook in Overseerr</li>
+                                                <li>Enable and paste the webhook URL above</li>
                                                 <li>Check &quot;Request Approved&quot; and &quot;Request Auto-Approved&quot;</li>
-                                                <li>Save</li>
+                                                <li>Save and test the webhook</li>
                                             </ol>
                                         </div>
                                     </>

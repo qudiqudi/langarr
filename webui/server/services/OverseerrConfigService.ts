@@ -21,7 +21,7 @@ export class OverseerrConfigService {
      * @returns The webhook URL to use
      */
     public getWebhookUrl(authToken: string): string {
-        return `http://langarr:3000/api/v1/webhook?token=${authToken}`;
+        return `http://langarr:8383/api/v1/webhook?token=${authToken}`;
     }
 
     /**

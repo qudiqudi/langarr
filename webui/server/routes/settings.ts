@@ -99,7 +99,7 @@ router.get('/webhook-info', async (req, res) => {
         }
 
         res.json({
-            url: `http://langarr:3000/api/v1/webhook?token=${settings.webhookAuthToken}`,
+            url: `http://langarr:8383/api/v1/webhook?token=${settings.webhookAuthToken}`,
             types: 132, // MEDIA_APPROVED + MEDIA_AUTO_APPROVED
             typesDescription: 'Request Approved, Request Auto-Approved'
         });
