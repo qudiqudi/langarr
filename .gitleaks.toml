@@ -14,14 +14,12 @@ paths = [
     '''.*\.sample\..*''',
     '''test_.*\.py''',
     '''.*/tests/.*\.py''',
+    '''\.github/workflows/.*''',
 ]
 
 # Exclude documentation files that reference tokens as examples
 regexes = [
     '''(README|CLAUDE)\.md.*auth_token''',
+    '''GITHUB_TOKEN''',
+    '''secrets\.''',
 ]
-
-# Exclude GitHub workflow files (they use secrets correctly via GitHub Actions)
-[[allowlist.regexTarget]]
-regex = '''GITHUB_TOKEN|secrets\.'''
-path = '''\.github/workflows/.*'''
