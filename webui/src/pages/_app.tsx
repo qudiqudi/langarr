@@ -1,26 +1,18 @@
 import '@/styles/globals.css';
 import type { AppProps } from 'next/app';
-import { useRouter } from 'next/router';
-import { useEffect, useState } from 'react';
 import { Toaster } from 'react-hot-toast';
 import { SWRConfig } from 'swr';
 import Layout from '@/components/Layout/Layout';
 import UserContext from '@/context/UserContext';
 
-// Pages that don't use the main layout
+// Pages that don't use the main layout - check via pageProps
 const noLayoutPages = ['/login', '/login/plex/loading', '/setup'];
 
-export default function App({ Component, pageProps }: AppProps) {
-  const router = useRouter();
-  const [shouldUseLayout, setShouldUseLayout] = useState(true);
-
-  // Check if current page should skip layout - only on client side
-  useEffect(() => {
-    const noLayout = noLayoutPages.some(
-      (page) => router.pathname === page || router.pathname.startsWith(page + '/')
-    );
-    setShouldUseLayout(!noLayout);
-  }, [router.pathname]);
+export default function App({ Component, pageProps, router }: AppProps) {
+  // Check if current page should skip layout using router from props (available during SSR)
+  const shouldUseLayout = !noLayoutPages.some(
+    (page) => router.pathname === page || router.pathname.startsWith(page + '/')
+  );
 
   return (
     <SWRConfig
