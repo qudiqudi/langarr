@@ -1,0 +1,32 @@
+title = "Langarr Gitleaks Configuration"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Allowlist for known safe patterns and files"
+
+# Exclude example/template files with placeholder values
+paths = [
+    '''language-tagger/config\.example\.yml''',
+    '''\.env\.example''',
+    '''.*\.example\..*''',
+    '''.*\.sample\..*''',
+]
+
+# Exclude documentation files that reference tokens as examples
+regexes = [
+    '''(README|CLAUDE)\.md.*auth_token''',
+]
+
+# Exclude GitHub workflow files (they use secrets correctly via GitHub Actions)
+[[allowlist.regexTarget]]
+regex = '''GITHUB_TOKEN|secrets\.'''
+path = '''\.github/workflows/.*'''
+
+# Exclude test files
+[[allowlist.paths]]
+regex = '''test_.*\.py'''
+
+[[allowlist.paths]]
+regex = '''.*/tests/.*\.py'''
