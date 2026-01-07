@@ -1,0 +1,32 @@
+# Automatically label PRs based on changed files
+
+'area/frontend':
+  - webui/src/**/*
+  - webui/public/**/*
+
+'area/backend':
+  - webui/server/**/*
+
+'area/database':
+  - webui/server/entity/**/*
+  - webui/server/datasource.ts
+
+'area/api':
+  - webui/server/routes/**/*
+
+'area/docker':
+  - webui/Dockerfile
+  - docker-compose.yml
+  - .dockerignore
+
+'area/ci':
+  - .github/workflows/**/*
+  - .github/dependabot.yml
+
+'area/docs':
+  - '**/*.md'
+  - docs/**/*
+
+'dependencies':
+  - webui/package.json
+  - webui/package-lock.json
