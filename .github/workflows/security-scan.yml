@@ -46,7 +46,7 @@ jobs:
         uses: aquasecurity/trivy-action@master
         with:
           scan-type: 'fs'
-          scan-ref: './language-tagger'
+          scan-ref: './webui'
           format: 'sarif'
           output: 'trivy-results.sarif'
           severity: 'CRITICAL,HIGH'
@@ -145,7 +145,7 @@ jobs:
 
       - name: Build Docker image for scanning
         run: |
-          docker build -t langarr-scan:latest ./language-tagger
+          docker build -t langarr-scan:latest ./webui
 
       - name: Run Trivy on Docker image
         uses: aquasecurity/trivy-action@master
