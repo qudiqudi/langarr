@@ -5,14 +5,14 @@ import { SWRConfig } from 'swr';
 import Layout from '@/components/Layout/Layout';
 import UserContext from '@/context/UserContext';
 
-// Pages that don't use the main layout - check via pageProps
-const noLayoutPages = ['/login', '/login/plex/loading', '/setup'];
+type ComponentWithLayout = React.ComponentType & {
+  noLayout?: boolean;
+};
 
-export default function App({ Component, pageProps, router }: AppProps) {
-  // Check if current page should skip layout using router from props (available during SSR)
-  const shouldUseLayout = !noLayoutPages.some(
-    (page) => router.pathname === page || router.pathname.startsWith(page + '/')
-  );
+export default function App({ Component, pageProps }: AppProps) {
+  // Check if page component has noLayout property
+  const ComponentTyped = Component as ComponentWithLayout;
+  const shouldUseLayout = !ComponentTyped.noLayout;
 
   return (
     <SWRConfig

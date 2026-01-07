@@ -13,3 +13,5 @@ export default function PlexLoadingPage() {
     </div>
   );
 }
+
+PlexLoadingPage.noLayout = true;

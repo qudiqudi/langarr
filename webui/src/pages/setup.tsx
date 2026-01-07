@@ -284,3 +284,5 @@ export default function SetupPage() {
         </div>
     );
 }
+
+SetupPage.noLayout = true;
