@@ -1,9 +1,7 @@
 import { useEffect } from 'react';
-import { useRouter } from 'next/router';
+import Router from 'next/router';
 
 export default function Home() {
-  const router = useRouter();
-
   useEffect(() => {
     const checkAuthAndSetup = async () => {
       try {
@@ -11,7 +9,7 @@ export default function Home() {
         const authRes = await fetch('/api/v1/auth/me', { credentials: 'include' });
         if (!authRes.ok) {
           // Not authenticated, redirect to login
-          router.push('/login');
+          Router.push('/login');
           return;
         }
 
@@ -20,22 +18,22 @@ export default function Home() {
         if (settingsRes.ok) {
           const settings = await settingsRes.json();
           if (settings.isSetup) {
-            router.push('/dashboard');
+            Router.push('/dashboard');
           } else {
-            router.push('/setup');
+            Router.push('/setup');
           }
         } else {
           // Fallback if settings API fails
-          router.push('/setup');
+          Router.push('/setup');
         }
       } catch {
         // Fallback on error - redirect to login for safety
-        router.push('/login');
+        Router.push('/login');
       }
     };
 
     checkAuthAndSetup();
-  }, [router]);
+  }, []);
 
   return <div className="text-white text-center mt-20">Loading...</div>;
 }

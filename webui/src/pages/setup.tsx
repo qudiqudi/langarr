@@ -1,11 +1,10 @@
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/router';
+import Router from 'next/router';
 import Head from 'next/head';
 import toast from 'react-hot-toast';
 import InstanceModal from '@/components/Settings/InstanceModal';
 
 export default function SetupPage() {
-    const router = useRouter();
     const [step, setStep] = useState(1);
     const [loading, setLoading] = useState(false);
     const [checkingSetup, setCheckingSetup] = useState(true);
@@ -25,7 +24,7 @@ export default function SetupPage() {
                 const authRes = await fetch('/api/v1/auth/me', { credentials: 'include' });
                 if (!authRes.ok) {
                     // Not authenticated, redirect to login
-                    router.push('/login');
+                    Router.push('/login');
                     return;
                 }
 
@@ -34,19 +33,19 @@ export default function SetupPage() {
                 if (settingsRes.ok) {
                     const settings = await settingsRes.json();
                     if (settings.isSetup) {
-                        router.push('/dashboard');
+                        Router.push('/dashboard');
                         return;
                     }
                 }
             } catch {
                 // On error, redirect to login for safety
-                router.push('/login');
+                Router.push('/login');
                 return;
             }
             setCheckingSetup(false);
         };
         checkAuthAndSetup();
-    }, [router]);
+    }, []);
 
     const validateStep1 = (): boolean => {
         const newErrors: { syncInterval?: string } = {};
@@ -85,7 +84,7 @@ export default function SetupPage() {
             if (!res.ok) throw new Error('Failed to save settings');
 
             toast.success('Setup complete!');
-            router.push('/dashboard');
+            Router.push('/dashboard');
         } catch (err) {
             toast.error('Failed to complete setup');
             console.error(err);
