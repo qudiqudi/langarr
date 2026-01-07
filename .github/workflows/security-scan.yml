@@ -53,7 +53,7 @@ jobs:
           exit-code: '0'  # Report but don't fail - vulnerabilities show in Security tab
 
       - name: Upload Trivy results to GitHub Security
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         if: always()
         with:
           sarif_file: 'trivy-results.sarif'
