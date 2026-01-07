@@ -12,6 +12,8 @@ paths = [
     '''\.env\.example''',
     '''.*\.example\..*''',
     '''.*\.sample\..*''',
+    '''test_.*\.py''',
+    '''.*/tests/.*\.py''',
 ]
 
 # Exclude documentation files that reference tokens as examples
@@ -23,10 +25,3 @@ regexes = [
 [[allowlist.regexTarget]]
 regex = '''GITHUB_TOKEN|secrets\.'''
 path = '''\.github/workflows/.*'''
-
-# Exclude test files
-[[allowlist.paths]]
-regex = '''test_.*\.py'''
-
-[[allowlist.paths]]
-regex = '''.*/tests/.*\.py'''
