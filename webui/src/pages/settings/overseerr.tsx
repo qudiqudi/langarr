@@ -28,7 +28,10 @@ const fetcher = (url: string) => fetch(url).then((res) => res.json());
 export default function OverseerrSettings() {
     const { data: instances, mutate } = useSWR<OverseerrInstance[]>('/api/v1/overseerr', fetcher);
     // Fetch global settings to manage Webhook
-    const { data: settings, mutate: mutateSettings } = useSWR<Settings>('/api/v1/settings', fetcher);
+    const { data: settings, mutate: mutateSettings } = useSWR<Settings>('/api/v1/settings', fetcher, {
+        refreshInterval: 3000, // Poll every 3 seconds for webhook test feedback
+        revalidateOnFocus: true
+    });
 
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedInstance, setSelectedInstance] = useState<OverseerrInstance | null>(null);
@@ -146,6 +149,16 @@ export default function OverseerrSettings() {
         }
     };
 
+    const formatRelativeTime = (date: Date | string) => {
+        const now = new Date();
+        const past = new Date(date);
+        const seconds = Math.floor((now.getTime() - past.getTime()) / 1000);
+
+        if (seconds < 60) return `${seconds} seconds ago`;
+        if (seconds < 3600) return `${Math.floor(seconds / 60)} minutes ago`;
+        if (seconds < 86400) return `${Math.floor(seconds / 3600)} hours ago`;
+        return past.toLocaleDateString();
+    };
 
     return (
         <>
@@ -304,6 +317,15 @@ export default function OverseerrSettings() {
                                             </div>
                                         </div>
 
+                                        {settings.lastWebhookTestAt && (
+                                            <div className="flex items-center gap-2 text-sm mt-2">
+                                                <div className="h-2 w-2 rounded-full bg-green-500"></div>
+                                                <span className="text-gray-400">
+                                                    Last tested: {formatRelativeTime(settings.lastWebhookTestAt)}
+                                                </span>
+                                            </div>
+                                        )}
+
                                         <div className="rounded-md bg-gray-800/50 p-4 text-sm text-gray-300">
                                             <p className="font-medium mb-2">Setup in Overseerr:</p>
                                             <ol className="list-decimal list-inside space-y-1 text-gray-400">
@@ -311,7 +333,8 @@ export default function OverseerrSettings() {
                                                 <li>Go to Settings → Notifications → Webhook in Overseerr</li>
                                                 <li>Enable and paste the webhook URL above</li>
                                                 <li>Check &quot;Request Approved&quot; and &quot;Request Auto-Approved&quot;</li>
-                                                <li>Save and test the webhook</li>
+                                                <li>Click &quot;Test&quot; to verify (status will appear above)</li>
+                                                <li>Save changes</li>
                                             </ol>
                                         </div>
                                     </>

@@ -10,6 +10,7 @@ export interface Settings {
     webhookEnabled: boolean;
     webhookAuthToken?: string;
     langarrBaseUrl?: string;
+    lastWebhookTestAt?: string;
     audioTagRules: AudioTagRule[];
     dryRunMode: boolean;
     updatedAt: string;

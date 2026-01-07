@@ -25,8 +25,9 @@ router.post('/', async (req, res) => {
         const { notification_type, media } = req.body;
 
         if (!media) {
-            // Test notification usually
-            return res.json({ status: 'ok', message: 'Received' });
+            // Test notification - update last test timestamp
+            await settingsRepo.update(1, { lastWebhookTestAt: new Date() });
+            return res.json({ status: 'ok', message: 'Test received' });
         }
 
         console.log(`[Webhook] Received ${notification_type} for ${media.title || 'Unknown'}`);

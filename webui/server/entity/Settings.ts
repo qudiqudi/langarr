@@ -33,6 +33,9 @@ export class Settings {
   @Column({ nullable: true })
   langarrBaseUrl?: string;
 
+  @Column({ nullable: true })
+  lastWebhookTestAt?: Date;
+
   // Audio tagging settings (global)
   @Column({ type: 'text', nullable: true })
   audioTagRules?: string;
