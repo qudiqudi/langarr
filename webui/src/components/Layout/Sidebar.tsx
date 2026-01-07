@@ -1,5 +1,6 @@
 import Link from 'next/link';
-import { useRouter } from 'next/router';
+import Router from 'next/router';
+import { useEffect, useState } from 'react';
 import {
   HomeIcon,
   Cog6ToothIcon,
@@ -30,13 +31,30 @@ const navigation: NavItem[] = [
 ];
 
 export default function Sidebar() {
-  const router = useRouter();
+  const [pathname, setPathname] = useState('');
+
+  // Track pathname on client side only
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setPathname(Router.pathname);
+
+      const handleRouteChange = (url: string) => {
+        setPathname(url);
+      };
+
+      Router.events.on('routeChangeComplete', handleRouteChange);
+      return () => {
+        Router.events.off('routeChangeComplete', handleRouteChange);
+      };
+    }
+  }, []);
 
   const isActive = (href: string) => {
+    if (!pathname) return false;
     if (href === '/settings') {
-      return router.pathname.startsWith('/settings');
+      return pathname.startsWith('/settings');
     }
-    return router.pathname === href || router.pathname.startsWith(href + '/');
+    return pathname === href || pathname.startsWith(href + '/');
   };
 
   return (
@@ -74,7 +92,7 @@ export default function Sidebar() {
                     key={child.name}
                     href={child.href}
                     className={`block rounded-md px-3 py-2 text-sm ${
-                      router.pathname === child.href
+                      pathname === child.href
                         ? 'text-white font-medium'
                         : 'text-gray-400 hover:text-white'
                     }`}

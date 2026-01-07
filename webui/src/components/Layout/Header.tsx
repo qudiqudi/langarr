@@ -2,16 +2,15 @@ import { Fragment } from 'react';
 import { Menu, Transition } from '@headlessui/react';
 import { ChevronDownIcon } from '@heroicons/react/24/outline';
 import { useUser } from '@/hooks/useUser';
-import { useRouter } from 'next/router';
+import Router from 'next/router';
 
 export default function Header() {
   const { user } = useUser();
-  const router = useRouter();
 
   const handleLogout = async () => {
     try {
       await fetch('/api/v1/auth/logout', { method: 'POST' });
-      router.push('/login');
+      Router.push('/login');
     } catch (error) {
       console.error('Logout failed:', error);
     }
