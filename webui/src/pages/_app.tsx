@@ -1,6 +1,7 @@
 import '@/styles/globals.css';
 import type { AppProps } from 'next/app';
 import { useRouter } from 'next/router';
+import { useEffect, useState } from 'react';
 import { Toaster } from 'react-hot-toast';
 import { SWRConfig } from 'swr';
 import Layout from '@/components/Layout/Layout';
@@ -11,12 +12,15 @@ const noLayoutPages = ['/login', '/login/plex/loading', '/setup'];
 
 export default function App({ Component, pageProps }: AppProps) {
   const router = useRouter();
+  const [shouldUseLayout, setShouldUseLayout] = useState(true);
 
-  // Check if current page should skip layout
-  // Only check pathname on client-side to avoid SSR/build-time router issues
-  const shouldUseLayout = typeof window === 'undefined' ? true : !noLayoutPages.some(
-    (page) => router.pathname === page || router.pathname.startsWith(page + '/')
-  );
+  // Check if current page should skip layout - only on client side
+  useEffect(() => {
+    const noLayout = noLayoutPages.some(
+      (page) => router.pathname === page || router.pathname.startsWith(page + '/')
+    );
+    setShouldUseLayout(!noLayout);
+  }, [router.pathname]);
 
   return (
     <SWRConfig
