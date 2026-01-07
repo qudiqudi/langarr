@@ -17,11 +17,12 @@ env:
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
-  build:
+  build-and-limit:
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
+      security-events: write
 
     steps:
       - name: Checkout repository
@@ -59,6 +60,31 @@ jobs:
             # Develop tag (only for develop branch)
             type=raw,value=develop,enable=${{ github.ref == 'refs/heads/develop' }}
 
+      - name: Build and load Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./webui
+          platforms: linux/amd64
+          load: true
+          tags: ${{ env.IMAGE_NAME }}:local-scan
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: '${{ env.IMAGE_NAME }}:local-scan'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'CRITICAL,HIGH'
+          exit-code: '0'
+
+      - name: Upload Trivy scan results
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'trivy-results.sarif'
+
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
@@ -67,7 +93,5 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          build-args: |
-            NODE_ENV=${{ github.ref == 'refs/heads/develop' && 'development' || 'production' }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
