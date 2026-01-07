@@ -1,0 +1,61 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [ main, develop ]
+  # Only run on PRs to avoid duplication with docker-build.yml
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./webui
+    steps:
+      - uses: actions/checkout@v4
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: ./webui/package-lock.json
+      - run: npm ci
+        env:
+          HUSKY: 0  # Disable husky in CI
+      - run: npm run lint
+
+  type-check:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./webui
+    steps:
+      - uses: actions/checkout@v4
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: ./webui/package-lock.json
+      - run: npm ci
+        env:
+          HUSKY: 0
+      - run: npm run type-check
+
+  build-test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./webui
+    steps:
+      - uses: actions/checkout@v4
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: ./webui/package-lock.json
+      - run: npm ci
+        env:
+          HUSKY: 0
+      - run: npm run build
