@@ -13,7 +13,8 @@ export default function App({ Component, pageProps }: AppProps) {
   const router = useRouter();
 
   // Check if current page should skip layout
-  const shouldUseLayout = !noLayoutPages.some(
+  // Only check pathname on client-side to avoid SSR/build-time router issues
+  const shouldUseLayout = typeof window === 'undefined' ? true : !noLayoutPages.some(
     (page) => router.pathname === page || router.pathname.startsWith(page + '/')
   );
 

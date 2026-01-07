@@ -1,3 +1,8 @@
+// Disable static generation for this page since it's a loading state
+export async function getServerSideProps() {
+  return { props: {} };
+}
+
 export default function PlexLoadingPage() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-gray-950">
