@@ -10,7 +10,7 @@
     "start": "next start",
     "lint": "next lint",
     "type-check": "tsc --noEmit",
-    "prepare": "husky"
+    "prepare": "husky || true"
   },
   "dependencies": {
     "@headlessui/react": "^2.2.9",
