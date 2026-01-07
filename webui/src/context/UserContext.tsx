@@ -14,10 +14,15 @@ export const UserContext = ({ initialUser, children }: UserContextProps) => {
   const routing = useRef(false);
 
   useEffect(() => {
-    revalidate();
-  }, [router.pathname, revalidate]);
+    if (router.isReady) {
+      revalidate();
+    }
+  }, [router.isReady, router.pathname, revalidate]);
 
   useEffect(() => {
+    // Only run on client side when router is ready
+    if (!router.isReady) return;
+
     // Don't redirect on login, setup, or loading pages
     if (
       !loading && // Wait for loading to finish
@@ -30,7 +35,8 @@ export const UserContext = ({ initialUser, children }: UserContextProps) => {
     }
   }, [router, user, error, loading]);
 
-  if (loading && !router.pathname.match(/(setup|login|loading)/)) {
+  // Show loading spinner only on client side
+  if (loading && router.isReady && !router.pathname.match(/(setup|login|loading)/)) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gray-950">
         <div className="h-8 w-8 animate-spin rounded-full border-4 border-indigo-600 border-t-transparent"></div>
