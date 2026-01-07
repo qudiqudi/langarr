@@ -27,3 +27,16 @@ Thumbs.db
 
 # Runtime
 *.lock
+
+# Local planning docs
+docs/
+
+# Local development stack
+test-stack/
+
+# SQLite databases
+config/*.db
+config/*.db-*
+
+# Claude settings
+.claude/

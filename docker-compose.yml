@@ -1,59 +1,19 @@
-version: '3.8'
-
-# ============================================================================
-# Langarr Language Tagger Service
-# ============================================================================
-# Copy this service into your existing docker-compose.yml
-#
-# Prerequisites:
-# 1. You must already have recyclarr configured in your stack
-# 2. Add the included recyclarr.yml to your existing recyclarr config directory
-# 3. Configure the .env variables below
-#
-# See README.md for detailed integration instructions
-# ============================================================================
-
 services:
   langarr:
-    image: ghcr.io/qudiqudi/langarr:latest
+    build:
+      context: ./webui
+    image: langarr:local
     container_name: langarr
-    read_only: true
-    tmpfs: /tmp
-    security_opt:
-      - no-new-privileges:true
-    depends_on:
-      - recyclarr  # Your existing recyclarr service
-    ports:
-      - "5678:5678"  # Webhook server port (for Seerr/Overseerr webhooks)
-    environment:
-      # Script configuration
-      - RUN_MODE=schedule
-      - CONFIG_PATH=/config/config.yml
-      - TZ=${TZ}
-      # Required: Radarr/Sonarr connection (use your existing env vars)
-      - RADARR_URL=${RADARR_URL}
-      - RADARR_API_KEY=${RADARR_API_KEY}
-      - SONARR_URL=${SONARR_URL}
-      - SONARR_API_KEY=${SONARR_API_KEY}
-      # Optional: Overseerr integration (uncomment to enable)
-      # - OVERSEERR_URL=${OVERSEERR_URL}
-      # - OVERSEERR_API_KEY=${OVERSEERR_API_KEY}
-      # Optional: Multiple instances (if you have 4K/Anime instances)
-      # - RADARR_4K_URL=${RADARR_4K_URL}
-      # - RADARR_4K_API_KEY=${RADARR_4K_API_KEY}
-      # - SONARR_ANIME_URL=${SONARR_ANIME_URL}
-      # - SONARR_ANIME_API_KEY=${SONARR_ANIME_API_KEY}
-      # Optional: Testing (preview changes without applying)
-      # - DRY_RUN=true
     volumes:
-      - ./langarr-config:/config:ro  # Your config directory
-    networks:
-      - ${DOCKER_NETWORK:-media-stack}  # Uses DOCKER_NETWORK env var or defaults to media-stack
+      - ./config:/config  # SQLite database storage
+    ports:
+      - "3000:3000"        # WebUI port
+      # - "5678:5678"      # Webhook port (optional)
+    environment:
+      - TZ=Etc/UTC
+      - PUID=1000
+      - PGID=1000
+      # - WEBHOOK_PORT=5678  # Uncomment if using webhook server
+    # networks:
+    #   - your_media_network  # Connect to same network as Radarr/Sonarr
     restart: unless-stopped
-    logging:
-      driver: json-file
-      options:
-        max-size: 10m
-        max-file: "3"
-
-# Note: No network definition needed - use your existing docker network

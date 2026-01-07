@@ -1,0 +1,60 @@
+
+    // --- Webhook Logic ---
+
+    async processSingleWebhookItem(mediaType: 'movie' | 'tv', tmdbId?: number, tvdbId?: number) {
+        if (!tmdbId && !tvdbId) {
+            await this.log('warn', 'Webhook received request without TMDb or TVDb ID', 'sync');
+            return;
+        }
+
+        await this.log('info', `Webhook triggered for ${mediaType} (TMDb: ${tmdbId}, TVDb: ${tvdbId})`, 'system');
+        const idDesc = tmdbId ? `TMDb ${tmdbId}` : `TVDb ${tvdbId}`;
+
+        if (mediaType === 'movie') {
+            await this.processSingleMovieGlobally(tmdbId!);
+        } else {
+            // For shows, we prefer TVDb for Sonarr, but might get TMDb from Overseerr
+            // We pass both if available, but usually Sonarr uses TVDb
+            await this.processSingleSeriesGlobally(tvdbId || tmdbId!); 
+        }
+    }
+
+    private async processSingleMovieGlobally(tmdbId: number) {
+        const repo = getRepository(RadarrInstance);
+        const instances = await repo.find({ where: { enabled: true } });
+
+        for (const instance of instances) {
+            try {
+                const client = new ArrClient(instance.baseUrl, instance.apiKey);
+                // Search by TMDb ID. 
+                // Radarr API: /api/v3/movie?tmdbId=123 (returns array)
+                // ArrClient needs a method for this, or we get all movies and filter (slow).
+                // Let's check `ArrClient`. If lookup not supported, we might need to add it or do a full sync specific to finding this ID.
+                // Actually, `getMovies` returns all. For efficiency with webhooks, we REALLY want a lookup.
+                // But `getMovies` is cached in some versions? No.
+                // Let's Assume we can use `getMovieLookup(term: string)` or `getMovies` and filter.
+                // Creating a specific `getMovieByTmdbId` in ArrClient would be best.
+                // For now, I'll assume we iterate since we don't want to change `ArrClient` too much if not guaranteed.
+                // WAIT! `client.getMovies()` gets ALL profiles. That's heavy for a webhook.
+                // We should check if `ArrClient` has `lookup` or `getMovie(id)`. 
+                // `getMovie(id)` is internal ID.
+                
+                // Let's use `getMovies` for now, it's safer.
+                const allMovies = await client.getMovies();
+                const movie = allMovies.find((m: any) => m.tmdbId === tmdbId);
+
+                if (movie) {
+                    await this.log('info', `Found movie in Radarr ${instance.name}: ${movie.title}`);
+                    // Reuse logic from processRadarrInstance but for single item
+                    await this.processSingleRadarrMovie(instance, client, movie, false); 
+                }
+            } catch (error) {
+                await this.log('error', `Error checking Radarr ${instance.name} for movie ${tmdbId}`, 'sync', { error: String(error) });
+            }
+        }
+    }
+    
+    // Split out single movie processing logic to reuse it
+    private async processSingleRadarrMovie(instance: RadarrInstance, client: ArrClient, movie: any, isDryRun: boolean) { 
+        // ... (refactored logic)
+    }
