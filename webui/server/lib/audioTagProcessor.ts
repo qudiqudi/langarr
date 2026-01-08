@@ -7,17 +7,9 @@
  * which audio tracks are present.
  */
 
-import ISO6391 from 'iso-639-1';
+import { AudioTagRule } from '../../shared/types';
 
-export interface AudioTagRule {
-    language: string;  // ISO 639-1 code (e.g., 'de', 'en')
-    tagName: string;
-}
-
-export interface ParsedLanguage {
-    code: string;      // ISO 639-1 code
-    canonical: string; // Canonical name (e.g., 'german')
-}
+export type { AudioTagRule };
 
 /**
  * Language name normalization map (various forms -> canonical name)
@@ -140,6 +132,7 @@ export function parseAudioLanguages(
         audioLangs = mediaInfo.audioLanguages || '';
     }
 
+    // Parse audio languages if present
     if (audioLangs) {
         // Split by slash (handle both "English/German" and "English / German")
         const rawLangs = audioLangs.split('/').map((l: string) => l.trim().toLowerCase());
@@ -154,7 +147,8 @@ export function parseAudioLanguages(
         }
     }
 
-    // Fallback to languages field if mediaInfo.audioLanguages was empty
+    // Check fallback if no languages appear in normalized set
+    // This handles cases where mediaInfo exists but audioLanguages is empty/invalid
     if (normalized.size === 0 && languagesFallback && languagesFallback.length > 0) {
         for (const langObj of languagesFallback) {
             if (typeof langObj === 'object' && langObj !== null) {
@@ -177,38 +171,41 @@ export function parseAudioLanguages(
  *
  * @param detectedLanguages - Set of canonical language names detected in audio tracks
  * @param audioTagRules - Array of {language, tagName} rules from settings
- * @param tagNameToId - Map of tag names to tag IDs
+ * @param audioTagNameToId - Map of tag name to tag ID (pre-resolved)
  * @param currentTags - Current tag IDs on the item
- * @returns Object with tagsToAdd and tagsToRemove sets
+ * @returns Object with newTags array and hasChanges boolean
  */
-export function determineAudioTagChanges(
+export function applyAudioTagChanges(
     detectedLanguages: Set<string>,
     audioTagRules: AudioTagRule[],
-    tagNameToId: Map<string, number>,
+    audioTagNameToId: Map<string, number>,
     currentTags: number[]
-): { tagsToAdd: Set<number>; tagsToRemove: Set<number> } {
-    const tagsToAdd = new Set<number>();
-    const tagsToRemove = new Set<number>();
+): { newTags: number[]; hasChanges: boolean } {
+    const newTags = [...currentTags];
+    let hasChanges = false;
     const currentTagSet = new Set(currentTags);
 
     for (const rule of audioTagRules) {
         const ruleCanonical = getCanonicalFromCode(rule.language);
-        const tagId = tagNameToId.get(rule.tagName);
+        const ruleTagId = audioTagNameToId.get(rule.tagName);
 
-        if (!tagId) continue;
+        if (!ruleTagId) continue;
 
         if (detectedLanguages.has(ruleCanonical)) {
             // Language detected - ensure tag is present
-            if (!currentTagSet.has(tagId)) {
-                tagsToAdd.add(tagId);
+            if (!currentTagSet.has(ruleTagId)) {
+                newTags.push(ruleTagId);
+                hasChanges = true;
             }
         } else {
             // Language not detected - ensure tag is removed
-            if (currentTagSet.has(tagId)) {
-                tagsToRemove.add(tagId);
+            const tagIndex = newTags.indexOf(ruleTagId);
+            if (tagIndex !== -1) {
+                newTags.splice(tagIndex, 1);
+                hasChanges = true;
             }
         }
     }
 
-    return { tagsToAdd, tagsToRemove };
+    return { newTags, hasChanges };
 }

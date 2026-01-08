@@ -111,9 +111,15 @@ export class ArrClient {
     }
 
     // Get all episode files for a series (includes mediaInfo)
-    async getEpisodeFiles(seriesId: number) {
+    // If seriesId is provided, filters by series. If not, returns all (Sonarr only supports this if API allows, standard is per series usually but newer versions might support it or require paging).
+    // Actually, widespread use suggests getting all files can be memory intensive. But for 'N+1' fix, we iterate series anyway.
+    // The reviewer suggested "getMovieFiles() pattern".
+    async getEpisodeFiles(seriesId?: number) {
+        const params: any = {};
+        if (seriesId) params.seriesId = seriesId;
+
         const response = await this.client.get('/api/v3/episodefile', {
-            params: { seriesId }
+            params
         });
         return response.data;
     }

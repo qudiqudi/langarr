@@ -1,12 +1,8 @@
-import { Fragment, useState, useRef } from 'react';
+import { Fragment, useState, useRef, useMemo } from 'react';
 import { Combobox, Transition } from '@headlessui/react';
 import { ChevronUpDownIcon, CheckIcon, PlusIcon, XMarkIcon } from '@heroicons/react/20/solid';
 import ISO6391 from 'iso-639-1';
-
-export interface AudioTagRule {
-    language: string;
-    tagName: string;
-}
+import { AudioTagRule } from '../../../shared/types';
 
 interface AudioTagEditorProps {
     value: AudioTagRule[];
@@ -21,32 +17,35 @@ export default function AudioTagEditor({ value = [], onChange, label }: AudioTag
     const comboButtonRef = useRef<HTMLButtonElement>(null);
 
     // Common languages to prioritize
-    const commonLanguages = ['en', 'fr', 'es', 'de', 'it', 'ja', 'ko', 'zh', 'hi', 'ru', 'pt'];
+    const commonLanguages = useMemo(() => ['en', 'fr', 'es', 'de', 'it', 'ja', 'ko', 'zh', 'hi', 'ru', 'pt'], []);
 
-    const allLanguages = ISO6391.getAllCodes()
-        .map((code) => ({
-            code,
-            name: ISO6391.getName(code),
-            nativeName: ISO6391.getNativeName(code),
-        }))
-        .sort((a, b) => {
-            const aCommon = commonLanguages.indexOf(a.code);
-            const bCommon = commonLanguages.indexOf(b.code);
+    const allLanguages = useMemo(() => {
+        return ISO6391.getAllCodes()
+            .map((code) => ({
+                code,
+                name: ISO6391.getName(code),
+                nativeName: ISO6391.getNativeName(code),
+            }))
+            .sort((a, b) => {
+                const aCommon = commonLanguages.indexOf(a.code);
+                const bCommon = commonLanguages.indexOf(b.code);
 
-            if (aCommon !== -1 && bCommon !== -1) return aCommon - bCommon;
-            if (aCommon !== -1) return -1;
-            if (bCommon !== -1) return 1;
-            return a.name.localeCompare(b.name);
-        });
+                if (aCommon !== -1 && bCommon !== -1) return aCommon - bCommon;
+                if (aCommon !== -1) return -1;
+                if (bCommon !== -1) return 1;
+                return a.name.localeCompare(b.name);
+            });
+    }, [commonLanguages]);
 
-    const filteredLanguages =
-        query === ''
+    const filteredLanguages = useMemo(() => {
+        return query === ''
             ? allLanguages
             : allLanguages.filter((lang) =>
                 lang.name.toLowerCase().includes(query.toLowerCase()) ||
                 lang.code.toLowerCase().includes(query.toLowerCase()) ||
                 lang.nativeName.toLowerCase().includes(query.toLowerCase())
             );
+    }, [query, allLanguages]);
 
     // Get selected language name for display in input
     const getLangDisplay = (code: string) => {
@@ -56,13 +55,16 @@ export default function AudioTagEditor({ value = [], onChange, label }: AudioTag
     };
 
     const handleAdd = () => {
-        if (newLang && newTag) {
-            if (value.some(rule => rule.language === newLang)) {
+        const lang = newLang.trim();
+        const tag = newTag.trim();
+
+        if (lang && tag) {
+            if (value.some(rule => rule.language === lang)) {
                 // Prevent duplicate rules for same language
                 // Could add toast here
                 return;
             }
-            onChange([...value, { language: newLang, tagName: newTag }]);
+            onChange([...value, { language: lang, tagName: tag }]);
             setNewLang('');
             setNewTag('');
             setQuery('');
@@ -159,7 +161,7 @@ export default function AudioTagEditor({ value = [], onChange, label }: AudioTag
                     <button
                         type="button"
                         onClick={handleAdd}
-                        disabled={!newLang || !newTag}
+                        disabled={!newLang || !newTag.trim()}
                         className="flex w-full items-center justify-center rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:opacity-50"
                     >
                         <PlusIcon className="h-5 w-5" aria-hidden="true" />
