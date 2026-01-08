@@ -212,15 +212,7 @@ export class SyncService {
         let lastTouchedItem: { title: string; poster: string | null; profile: string | null } | null = null;
 
         // Pre-resolve audio tag IDs to avoid lookups in loop
-        const audioTagNameToId = new Map<string, number>();
-        if (audioTags.length > 0) {
-            for (const rule of audioTags) {
-                const tagId = await this.getOrCreateTagId(client, rule.tagName, isDryRun);
-                if (tagId) {
-                    audioTagNameToId.set(rule.tagName, tagId);
-                }
-            }
-        }
+        const audioTagNameToId = await this.resolveAudioTagIds(client, audioTags, isDryRun);
 
         // Build reverse profile map (ID -> name) for display
         const profileIdToName: Record<number, string> = {};
@@ -310,19 +302,12 @@ export class SyncService {
         Object.entries(profileNameToId).forEach(([name, id]) => { profileIdToName[id] = name; });
 
         // Pre-resolve audio tag IDs
-        const audioTagNameToId = new Map<string, number>();
-        if (audioTags.length > 0) {
-            for (const rule of audioTags) {
-                const tagId = await this.getOrCreateTagId(client, rule.tagName, isDryRun);
-                if (tagId) {
-                    audioTagNameToId.set(rule.tagName, tagId);
-                }
-            }
-        }
+        const audioTagNameToId = await this.resolveAudioTagIds(client, audioTags, isDryRun);
 
         // N+1 Fix: Fetch ALL episode files once if audio tagging is enabled
         // This avoids 1 API call per series
         const seriesFilesMap = new Map<number, any[]>();
+        let batchFetchSucceeded = false;
         if (audioTags.length > 0) {
             try {
                 await this.log('info', `Fetching all episode files for ${instance.name} (N+1 optimization)...`);
@@ -335,9 +320,11 @@ export class SyncService {
                     }
                     seriesFilesMap.get(file.seriesId)?.push(file);
                 }
+                batchFetchSucceeded = true;
                 await this.log('info', `Fetched ${allFiles.length} files for ${instance.name}`);
             } catch (e: any) {
                 await this.log('warn', `Failed to batch fetch episode files (API might not support it), falling back to per-series: ${e.message}`);
+                batchFetchSucceeded = false;
             }
         }
 
@@ -354,13 +341,10 @@ export class SyncService {
             // So if batch fetch fails, we should perhaps loop and fill map? Or just handle inside processSeries (pass client).
             // Let's change processSeries signature to accept `episodeFiles` (optional). If provided, use it. If not, fetch.
 
-            const preFetchedFiles = seriesFilesMap.size > 0 ? (seriesFilesMap.get(series.id) || []) : undefined;
-            // If seriesFilesMap size is 0, it means either no files in whole system OR fetch failed.
-            // If fetch failed, we want individual fetch.
-            // If no files, we want empty list.
-            // Hard to distinguish without a flag.
-            // Let's just assume if we tried and failed, we logged warning. 
-            // For now, let's just pass `preFetchedFiles`. If undefined, `processSeries` will fetch.
+            // If we successfully batch fetched, use the files from map.
+            // If batchFetchSucceeded is true but no files in map for this series, it means series has no files (pass empty array).
+            // If batchFetchSucceeded is false, pass undefined so processSeries fetches individually.
+            const preFetchedFiles = batchFetchSucceeded ? (seriesFilesMap.get(series.id) || []) : undefined;
 
             const updated = await this.processSeries(client, instance, series, originalLanguages, audioTags, audioTagNameToId, targetTagId, isDryRun, originalProfileId, dubProfileId, preFetchedFiles);
             if (updated) {
@@ -413,6 +397,19 @@ export class SyncService {
             await this.log('error', 'Error creating tag', 'sync', { error: String(error) });
             return null;
         }
+    }
+
+    private async resolveAudioTagIds(client: ArrClient, audioTags: AudioTagRule[], isDryRun: boolean): Promise<Map<string, number>> {
+        const audioTagNameToId = new Map<string, number>();
+        if (audioTags.length > 0) {
+            for (const rule of audioTags) {
+                const tagId = await this.getOrCreateTagId(client, rule.tagName, isDryRun);
+                if (tagId) {
+                    audioTagNameToId.set(rule.tagName, tagId);
+                }
+            }
+        }
+        return audioTagNameToId;
     }
 
     // --- Overseerr Logic ---
@@ -629,15 +626,8 @@ export class SyncService {
                         : [];
 
                     // Pre-resolve audio tag IDs
-                    const audioTagNameToId = new Map<string, number>();
-                    if (audioTags.length > 0) {
-                        for (const rule of audioTags) {
-                            const tagId = await this.getOrCreateTagId(client, rule.tagName, isDryRun);
-                            if (tagId) {
-                                audioTagNameToId.set(rule.tagName, tagId);
-                            }
-                        }
-                    }
+                    // Pre-resolve audio tag IDs
+                    const audioTagNameToId = await this.resolveAudioTagIds(client, audioTags, isDryRun);
 
 
                     const targetTagId = instance.tagName ? (await this.getOrCreateTagId(client, instance.tagName, isDryRun)) : null;
@@ -686,15 +676,8 @@ export class SyncService {
                         : [];
 
                     // Pre-resolve audio tag IDs
-                    const audioTagNameToId = new Map<string, number>();
-                    if (audioTags.length > 0) {
-                        for (const rule of audioTags) {
-                            const tagId = await this.getOrCreateTagId(client, rule.tagName, isDryRun);
-                            if (tagId) {
-                                audioTagNameToId.set(rule.tagName, tagId);
-                            }
-                        }
-                    }
+                    // Pre-resolve audio tag IDs
+                    const audioTagNameToId = await this.resolveAudioTagIds(client, audioTags, isDryRun);
 
                     await this.processSeries(client, instance, series, originalLanguages, audioTags, audioTagNameToId, targetTagId, isDryRun, originalProfileId, dubProfileId);
                 }
@@ -902,18 +885,26 @@ export class SyncService {
             } else {
                 await this.log('info', `Updating series ${series.title}`);
                 try {
-                    const profileToSend = Number(newProfileId);
+                    // The profileToSend variable is not strictly necessary if newProfileId is already a number or can be implicitly converted.
+                    // Using newProfileId directly for consistency with the instruction's implied change.
                     await client.updateSeries(series.id, {
                         ...series,
-                        qualityProfileId: profileToSend,
+                        qualityProfileId: newProfileId,
                         tags: newTags
                     });
 
+                    // Trigger search if enabled
                     if (instance.triggerSearchOnUpdate) {
                         await this.triggerSeriesSearch(client, instance, series.id, series.title);
                     }
                 } catch (updateError: any) {
-                    await this.log('error', `Sonarr API error updating ${series.title}: ${updateError}`, 'sync');
+                    // Log detailed error for debugging, consistent with Movie update
+                    if (updateError.response) {
+                        await this.log('error', `Sonarr API error updating ${series.title}: Status ${updateError.response.status}`, 'sync', {
+                            data: updateError.response.data,
+                            seriesId: series.id
+                        });
+                    }
                     throw updateError;
                 }
             }

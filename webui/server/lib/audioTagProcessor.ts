@@ -11,6 +11,10 @@ import { AudioTagRule } from '../../shared/types';
 
 export type { AudioTagRule };
 
+export interface MediaInfo {
+    audioLanguages?: string;
+    [key: string]: any;
+}
 /**
  * Language name normalization map (various forms -> canonical name)
  * This allows matching regardless of format (code, full name, variations)
@@ -84,19 +88,33 @@ export function normalizeLanguage(lang: string): string {
     const langLower = lang.toLowerCase().trim();
     if (!langLower) return '';
 
-    // Try exact match first
-    const canonical = LANGUAGE_ALIASES[langLower];
-    if (canonical) return canonical;
+    // Direct O(1) lookup
+    if (LANGUAGE_ALIASES[langLower]) {
+        return LANGUAGE_ALIASES[langLower];
+    }
 
-    // Try partial matching for names like "english (us)"
-    for (const [alias, canonicalName] of Object.entries(LANGUAGE_ALIASES)) {
-        if (alias.length > 2 && (langLower.includes(alias) || alias.includes(langLower))) {
-            return canonicalName;
+    // Common variant suffixes logic (simpler/faster than O(N) includes)
+    // Handle "english (us)", "english (uk)", etc.
+    if (langLower.includes('(')) {
+        const base = langLower.split('(')[0].trim();
+        if (LANGUAGE_ALIASES[base]) {
+            return LANGUAGE_ALIASES[base];
         }
     }
 
-    // Unknown language - return as-is (lowercase)
-    return langLower;
+    // Fallback: Check if any known alias is a substring (only for short strings to avoid perf hit)
+    // Only used if direct lookup failed
+    if (langLower.length < 20) {
+        for (const [alias, canonicalName] of Object.entries(LANGUAGE_ALIASES)) {
+            // Only match if alias is substantial (len > 2)
+            if (alias.length > 2 && langLower.includes(alias)) {
+                return canonicalName;
+            }
+        }
+    }
+
+    // FAST FAIL for very long unknown strings or just return simplified
+    return langLower; // Return as-is if no match
 }
 
 /**
@@ -121,7 +139,7 @@ export function getCanonicalFromCode(code: string): string {
  * @returns Set of normalized canonical language names (e.g., Set{'english', 'german'})
  */
 export function parseAudioLanguages(
-    mediaInfo: Record<string, any> | null | undefined,
+    mediaInfo: MediaInfo | null | undefined,
     languagesFallback: Array<{ name?: string; id?: number }> | null | undefined
 ): Set<string> {
     const normalized = new Set<string>();
@@ -181,7 +199,7 @@ export function applyAudioTagChanges(
     audioTagNameToId: Map<string, number>,
     currentTags: number[]
 ): { newTags: number[]; hasChanges: boolean } {
-    const newTags = [...currentTags];
+    let newTags = [...currentTags];
     let hasChanges = false;
     const currentTagSet = new Set(currentTags);
 
@@ -194,14 +212,13 @@ export function applyAudioTagChanges(
         if (detectedLanguages.has(ruleCanonical)) {
             // Language detected - ensure tag is present
             if (!currentTagSet.has(ruleTagId)) {
-                newTags.push(ruleTagId);
+                newTags = [...newTags, ruleTagId];
                 hasChanges = true;
             }
         } else {
             // Language not detected - ensure tag is removed
-            const tagIndex = newTags.indexOf(ruleTagId);
-            if (tagIndex !== -1) {
-                newTags.splice(tagIndex, 1);
+            if (currentTagSet.has(ruleTagId)) {
+                newTags = newTags.filter(t => t !== ruleTagId);
                 hasChanges = true;
             }
         }
