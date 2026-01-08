@@ -87,6 +87,10 @@ const LANGUAGE_ALIASES: Record<string, string> = {
 // Cache map entries for performance (avoid re-creating array on every call)
 const ALIAS_ENTRIES = Object.entries(LANGUAGE_ALIASES);
 
+// Constants for normalization lookup optimization
+const MAX_LENGTH_FOR_SUBSTRING_CHECK = 20;
+const MIN_ALIAS_LENGTH_FOR_MATCH = 2;
+
 export function normalizeLanguage(lang: string): string {
     const langLower = lang.toLowerCase().trim();
     if (!langLower) return '';
@@ -107,10 +111,10 @@ export function normalizeLanguage(lang: string): string {
 
     // Fallback: Check if any known alias is a substring (only for short strings to avoid perf hit)
     // Only used if direct lookup failed
-    if (langLower.length < 20) {
+    if (langLower.length < MAX_LENGTH_FOR_SUBSTRING_CHECK) {
         for (const [alias, canonicalName] of ALIAS_ENTRIES) {
             // Only match if alias is substantial (len > 2)
-            if (alias.length > 2 && langLower.includes(alias)) {
+            if (alias.length > MIN_ALIAS_LENGTH_FOR_MATCH && langLower.includes(alias)) {
                 return canonicalName;
             }
         }

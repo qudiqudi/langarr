@@ -670,7 +670,6 @@ export class SyncService {
                     const targetTagId = instance.tagName ? (await this.getOrCreateTagId(client, instance.tagName, isDryRun)) : null;
 
                     // Get global audio tag rules if audio tagging is enabled for this instance
-                    // Get global audio tag rules if audio tagging is enabled for this instance
                     const audioTags: AudioTagRule[] = instance.audioTaggingEnabled && settings
                         ? settings.getAudioTagRules()
                         : [];
@@ -777,7 +776,8 @@ export class SyncService {
                             movieId: movie.id
                         });
                     }
-                    throw updateError;
+                    // Swallow error to prevent stopping the entire sync (Phase 4 fix)
+                    return false;
                 }
             }
             return true;
@@ -906,7 +906,8 @@ export class SyncService {
                             seriesId: series.id
                         });
                     }
-                    throw updateError;
+                    // Swallow error to prevent stopping the entire sync
+                    return false;
                 }
             }
             return true;
