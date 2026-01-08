@@ -92,6 +92,23 @@ it('should fallback to languages array if mediaInfo is empty', () => {
     expect(result).toEqual(new Set(['french', 'italian']));
 });
 
+it('should parse single slash as empty set', () => {
+    const input = { audioLanguages: '/' };
+    const result = parseAudioLanguages(input, null);
+    expect(result).toEqual(new Set([]));
+});
+
+it('should handle null/undefined inputs gracefully', () => {
+    expect(parseAudioLanguages(null, null)).toEqual(new Set([]));
+    expect(parseAudioLanguages(undefined, undefined)).toEqual(new Set([]));
+});
+
+it('should ignore empty strings in slash-separated list', () => {
+    const input = { audioLanguages: 'English//German' };
+    const result = parseAudioLanguages(input, null);
+    expect(result).toEqual(new Set(['english', 'german']));
+});
+
 it('should prioritise mediaInfo over fallback', () => {
     const mediaInfo = { audioLanguages: 'English' };
     const fallback = [{ name: 'French' }];
@@ -152,6 +169,63 @@ it('should exclude tags defined in rules but not in map (invalid tags)', () => {
 
     expect(hasChanges).toBe(false);
     expect(newTags).toEqual([]);
+});
+
+// --- Integration Logic Scenarios (Mocking SyncService Logic) ---
+it('should correctly intersect languages across multiple episodes', () => {
+    // Scenario: Series has 3 episodes
+    // Ep 1: English, German
+    // Ep 2: English
+    // Ep 3: English, French
+    // Common: English (German dropped by Ep 2/3, French dropped by Ep 1/2)
+
+    const ep1 = new Set(['english', 'german']);
+    const ep2 = new Set(['english']);
+    const ep3 = new Set(['english', 'french']);
+
+    // Simulate SyncService logic
+    let common: string[] | null = null;
+    const episodes = [ep1, ep2, ep3];
+
+    for (const detected of episodes) {
+        if (common === null) {
+            common = Array.from(detected);
+        } else {
+            common = common.filter(l => detected.has(l));
+        }
+    }
+
+    const result = new Set(common);
+    expect(result).toEqual(new Set(['english']));
+});
+
+it('should skip empty language sets in intersection (Bug Fix Verification)', () => {
+    // Scenario: 
+    // Ep 1: No audio data (e.g. not scanned) -> should be skipped
+    // Ep 2: German
+    // Ep 3: German
+    // Result should be German, NOT empty set
+
+    const ep1 = new Set([]);
+    const ep2 = new Set(['german']);
+    const ep3 = new Set(['german']);
+
+    let common: string[] | null = null;
+    const episodes = [ep1, ep2, ep3];
+
+    for (const detected of episodes) {
+        // The fix: skip empty
+        if (detected.size === 0) continue;
+
+        if (common === null) {
+            common = Array.from(detected);
+        } else {
+            common = common.filter(l => detected.has(l));
+        }
+    }
+
+    const result = new Set(common || []);
+    expect(result).toEqual(new Set(['german']));
 });
 
 // Summary

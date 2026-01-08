@@ -625,7 +625,7 @@ export class SyncService {
                         ? settings.getAudioTagRules()
                         : [];
 
-                    // Pre-resolve audio tag IDs
+
                     // Pre-resolve audio tag IDs
                     const audioTagNameToId = await this.resolveAudioTagIds(client, audioTags, isDryRun);
 
@@ -675,7 +675,7 @@ export class SyncService {
                         ? settings.getAudioTagRules()
                         : [];
 
-                    // Pre-resolve audio tag IDs
+
                     // Pre-resolve audio tag IDs
                     const audioTagNameToId = await this.resolveAudioTagIds(client, audioTags, isDryRun);
 
@@ -850,8 +850,10 @@ export class SyncService {
                     let commonLangsArr: string[] | null = null;
 
                     for (const file of episodeFiles) {
-                        const detected = parseAudioLanguages(file.mediaInfo, file.languages); // Adjust if SyncService context? No, imported fxn.
-                        // Wait, parseAudioLanguages is imported.
+                        const detected = parseAudioLanguages(file.mediaInfo, file.languages);
+
+                        // Skip files with no detected languages to prevent false negatives in intersection
+                        if (detected.size === 0) continue;
 
                         if (commonLangsArr === null) {
                             commonLangsArr = Array.from(detected);
@@ -885,8 +887,7 @@ export class SyncService {
             } else {
                 await this.log('info', `Updating series ${series.title}`);
                 try {
-                    // The profileToSend variable is not strictly necessary if newProfileId is already a number or can be implicitly converted.
-                    // Using newProfileId directly for consistency with the instruction's implied change.
+
                     await client.updateSeries(series.id, {
                         ...series,
                         qualityProfileId: newProfileId,

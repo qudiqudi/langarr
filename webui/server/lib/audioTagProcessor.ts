@@ -84,6 +84,9 @@ const LANGUAGE_ALIASES: Record<string, string> = {
  * @param lang - Language string to normalize (e.g., "eng", "German", "en")
  * @returns Canonical language name (e.g., "english", "german")
  */
+// Cache map entries for performance (avoid re-creating array on every call)
+const ALIAS_ENTRIES = Object.entries(LANGUAGE_ALIASES);
+
 export function normalizeLanguage(lang: string): string {
     const langLower = lang.toLowerCase().trim();
     if (!langLower) return '';
@@ -105,7 +108,7 @@ export function normalizeLanguage(lang: string): string {
     // Fallback: Check if any known alias is a substring (only for short strings to avoid perf hit)
     // Only used if direct lookup failed
     if (langLower.length < 20) {
-        for (const [alias, canonicalName] of Object.entries(LANGUAGE_ALIASES)) {
+        for (const [alias, canonicalName] of ALIAS_ENTRIES) {
             // Only match if alias is substantial (len > 2)
             if (alias.length > 2 && langLower.includes(alias)) {
                 return canonicalName;
