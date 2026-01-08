@@ -110,6 +110,20 @@ export class ArrClient {
         return response.data;
     }
 
+    // Get all episode files for a series (includes mediaInfo)
+    async getEpisodeFiles(seriesId: number) {
+        const response = await this.client.get('/api/v3/episodefile', {
+            params: { seriesId }
+        });
+        return response.data;
+    }
+
+    // Get all movie files (includes mediaInfo) - Radarr only
+    async getMovieFiles() {
+        const response = await this.client.get('/api/v3/moviefile');
+        return response.data;
+    }
+
     // Command
     async runCommand(name: string, opts: any = {}) {
         const response = await this.client.post('/api/v3/command', {
