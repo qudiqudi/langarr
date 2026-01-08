@@ -10,6 +10,7 @@ import { OverseerrClient } from '../lib/overseerrClient';
 import { broadcastLogEntry } from '../routes/logs';
 import { searchRateLimiter } from '../lib/searchRateLimiter';
 import { profileCache } from '../lib/profileCache';
+import { parseAudioLanguages, getCanonicalFromCode, AudioTagRule } from '../lib/audioTagProcessor';
 
 export interface SyncOptions {
     dryRun?: boolean;
@@ -250,9 +251,10 @@ export class SyncService {
 
         // Check global settings for dryRun if not provided in options
         let isDryRun = options?.dryRun;
+        const settingsRepo = getRepository(Settings);
+        const settings = await settingsRepo.findOne({ where: { id: 1 } });
+
         if (isDryRun === undefined) {
-            const settingsRepo = getRepository(Settings);
-            const settings = await settingsRepo.findOne({ where: { id: 1 } });
             isDryRun = settings?.dryRunMode || false;
         }
 
@@ -284,6 +286,11 @@ export class SyncService {
         const originalLanguages = instance.getOriginalLanguages();
         const targetTagId = instance.tagName ? (await this.getOrCreateTagId(client, instance.tagName, isDryRun)) : null;
 
+        // Get global audio tag rules if audio tagging is enabled for this instance
+        const audioTags: AudioTagRule[] = instance.audioTaggingEnabled && settings
+            ? settings.getAudioTagRules()
+            : [];
+
         let processedCount = 0;
         let lastTouchedItem: { title: string; poster: string | null; profile: string | null } | null = null;
 
@@ -292,7 +299,7 @@ export class SyncService {
         Object.entries(profileNameToId).forEach(([name, id]) => { profileIdToName[id] = name; });
 
         for (const series of allSeries) {
-            const updated = await this.processSeries(client, instance, series, originalLanguages, targetTagId, isDryRun, originalProfileId, dubProfileId);
+            const updated = await this.processSeries(client, instance, series, originalLanguages, audioTags, targetTagId, isDryRun, originalProfileId, dubProfileId);
             if (updated) {
                 processedCount++;
                 // Determine which profile was assigned
@@ -597,7 +604,12 @@ export class SyncService {
                     const originalLanguages = instance.getOriginalLanguages();
                     const targetTagId = instance.tagName ? (await this.getOrCreateTagId(client, instance.tagName, isDryRun)) : null;
 
-                    await this.processSeries(client, instance, series, originalLanguages, targetTagId, isDryRun, originalProfileId, dubProfileId);
+                    // Get global audio tag rules if audio tagging is enabled for this instance
+                    const audioTags: AudioTagRule[] = instance.audioTaggingEnabled && settings
+                        ? settings.getAudioTagRules()
+                        : [];
+
+                    await this.processSeries(client, instance, series, originalLanguages, audioTags, targetTagId, isDryRun, originalProfileId, dubProfileId);
                 }
             } catch (error) {
                 await this.log('error', `Error checking Sonarr ${instance.name} for series ${tvdbId}: ${error}`, 'sync');
@@ -647,19 +659,41 @@ export class SyncService {
             }
         }
 
-        // 2. Audio Tags (Requires File)
-        if (movie.movieFile) {
-            const languages = movie.movieFile.languages || [];
-            const fileLangCodes = languages.map((l: any) => {
-                // Radarr languages often { name: 'English' }
-                return ISO6391.getCode(l.name) || 'xx';
-            });
+        // 2. Audio Tags (Requires File - uses mediaInfo.audioLanguages with fallback)
+        if (movie.movieFile && audioTags.length > 0) {
+            const mediaInfo = movie.movieFile.mediaInfo;
+            const languagesFallback = movie.movieFile.languages;
 
+            // Parse audio languages from mediaInfo (primary) or languages field (fallback)
+            const detectedLanguages = parseAudioLanguages(mediaInfo, languagesFallback);
+
+            // Build tag name -> ID map for audio tags
+            const audioTagNameToId = new Map<string, number>();
             for (const rule of audioTags) {
-                if (fileLangCodes.includes(rule.language)) {
-                    const ruleTagId = await this.getOrCreateTagId(client, rule.tagName, isDryRun);
-                    if (ruleTagId && !newTags.includes(ruleTagId)) {
+                const tagId = await this.getOrCreateTagId(client, rule.tagName, isDryRun);
+                if (tagId) {
+                    audioTagNameToId.set(rule.tagName, tagId);
+                }
+            }
+
+            // Determine which tags to add/remove based on detected languages
+            for (const rule of audioTags) {
+                const ruleCanonical = getCanonicalFromCode(rule.language);
+                const ruleTagId = audioTagNameToId.get(rule.tagName);
+
+                if (!ruleTagId) continue;
+
+                if (detectedLanguages.has(ruleCanonical)) {
+                    // Language detected - add tag if missing
+                    if (!newTags.includes(ruleTagId)) {
                         newTags.push(ruleTagId);
+                        needsUpdate = true;
+                    }
+                } else {
+                    // Language not detected - remove tag if present
+                    const tagIndex = newTags.indexOf(ruleTagId);
+                    if (tagIndex !== -1) {
+                        newTags.splice(tagIndex, 1);
                         needsUpdate = true;
                     }
                 }
@@ -726,7 +760,7 @@ export class SyncService {
         }
     }
 
-    private async processSeries(client: ArrClient, instance: SonarrInstance, series: any, originalLanguages: string[], targetTagId: number | null, isDryRun: boolean, originalProfileId?: number | null, dubProfileId?: number | null): Promise<boolean> {
+    private async processSeries(client: ArrClient, instance: SonarrInstance, series: any, originalLanguages: string[], audioTags: AudioTagRule[], targetTagId: number | null, isDryRun: boolean, originalProfileId?: number | null, dubProfileId?: number | null): Promise<boolean> {
         if (instance.onlyMonitored && !series.monitored) return false;
 
         let needsUpdate = false;
@@ -752,6 +786,78 @@ export class SyncService {
                 if (targetTagId && !newTags.includes(targetTagId)) {
                     newTags.push(targetTagId);
                 }
+            }
+        }
+
+        // Audio Tags (Requires Episode Files - uses intersection logic)
+        if (audioTags.length > 0) {
+            try {
+                const episodeFiles = await client.getEpisodeFiles(series.id);
+
+                if (episodeFiles && episodeFiles.length > 0) {
+                    // Collect languages that are present in ALL episodes (intersection)
+                    // Only tag the series if every episode with language data has the language
+                    let commonLangsArr: string[] | null = null;
+                    let episodesWithLangs = 0;
+
+                    for (const epFile of episodeFiles) {
+                        const mediaInfo = epFile.mediaInfo;
+                        const languagesFallback = epFile.languages;
+                        const detected = parseAudioLanguages(mediaInfo, languagesFallback);
+
+                        // Skip episodes with no detected languages (don't let them wipe intersection)
+                        if (detected.size === 0) {
+                            continue;
+                        }
+
+                        episodesWithLangs++;
+                        const detectedArr = Array.from(detected);
+                        if (commonLangsArr === null) {
+                            commonLangsArr = detectedArr;
+                        } else {
+                            // Intersection - keep only languages present in both
+                            commonLangsArr = commonLangsArr.filter(lang => detected.has(lang));
+                        }
+                    }
+
+                    // Only process audio tags if we found episodes with language data
+                    const commonLangs = commonLangsArr !== null ? new Set(commonLangsArr) : null;
+                    if (commonLangs !== null && episodesWithLangs > 0) {
+                        // Build tag name -> ID map for audio tags
+                        const audioTagNameToId = new Map<string, number>();
+                        for (const rule of audioTags) {
+                            const tagId = await this.getOrCreateTagId(client, rule.tagName, isDryRun);
+                            if (tagId) {
+                                audioTagNameToId.set(rule.tagName, tagId);
+                            }
+                        }
+
+                        // Determine which tags to add/remove based on detected languages
+                        for (const rule of audioTags) {
+                            const ruleCanonical = getCanonicalFromCode(rule.language);
+                            const ruleTagId = audioTagNameToId.get(rule.tagName);
+
+                            if (!ruleTagId) continue;
+
+                            if (commonLangs.has(ruleCanonical)) {
+                                // Language detected in all episodes - add tag if missing
+                                if (!newTags.includes(ruleTagId)) {
+                                    newTags.push(ruleTagId);
+                                    needsUpdate = true;
+                                }
+                            } else {
+                                // Language not detected in all episodes - remove tag if present
+                                const tagIndex = newTags.indexOf(ruleTagId);
+                                if (tagIndex !== -1) {
+                                    newTags.splice(tagIndex, 1);
+                                    needsUpdate = true;
+                                }
+                            }
+                        }
+                    }
+                }
+            } catch (error) {
+                await this.log('warn', `Failed to fetch episode files for ${series.title}: ${error}`);
             }
         }
 
