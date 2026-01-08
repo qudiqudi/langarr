@@ -137,7 +137,10 @@ export function normalizeLanguage(lang: string): string {
 
                 // Solution: alias must be a word match?
                 // \b matches word boundary.
-                const regex = new RegExp(`\\b${alias}\\b`, 'i');
+                // Escape alias to prevent regex injection (security fix)
+                const escapedAlias = alias.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                // \b matches word boundary.
+                const regex = new RegExp(`\\b${escapedAlias}\\b`, 'i');
                 if (regex.test(langLower)) {
                     return canonicalName;
                 }

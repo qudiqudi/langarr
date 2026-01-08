@@ -837,7 +837,13 @@ export class SyncService {
                 // Use pre-fetched files if available, otherwise fetch
                 let episodeFiles = preFetchedFiles;
                 if (!episodeFiles) {
-                    episodeFiles = await client.getEpisodeFiles(series.id);
+                    try {
+                        episodeFiles = await client.getEpisodeFiles(series.id);
+                    } catch (fetchErr) {
+                        await this.log('warn', `Failed to fetch episode files for series ${series.title}: ${fetchErr}`, 'sync');
+                        // Continue without files (skips tagging for this series)
+                        episodeFiles = [];
+                    }
                 }
 
                 if (episodeFiles && episodeFiles.length > 0) {

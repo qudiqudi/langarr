@@ -109,6 +109,13 @@ it('should ignore empty strings in slash-separated list', () => {
     expect(result).toEqual(new Set(['english', 'german']));
 });
 
+it('should handle regex special characters in input gracefully (Security)', () => {
+    // "English (Test)" contains parentheses which are special in regex
+    expect(normalizeLanguage('English (Test)')).toBe('english');
+    // "Test+" shouldn't crash if we had an alias like "Test+" (we don't, but checks safety)
+    expect(normalizeLanguage('Test+')).toBe('test+');
+});
+
 it('should prioritise mediaInfo over fallback', () => {
     const mediaInfo = { audioLanguages: 'English' };
     const fallback = [{ name: 'French' }];
