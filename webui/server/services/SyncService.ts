@@ -329,18 +329,6 @@ export class SyncService {
         }
 
         for (const series of allSeries) {
-            // Get files for this series (from cache or let processSeries fetch if missing/empty and needed)
-            // Actually processSeries will check passed files. If we failed batch fetch, map is empty.
-            // We'll handle fallback in processSeries logic or just pass what we have.
-            // Wait, if map is empty because fetch failed, we want processSeries to fetch.
-            // But if map is empty because no files, we don't want fetch.
-            // Let's pass the map (or files) and let processSeries decide?
-            // Safer: pass `seriesFiles` if we did batch fetch. If we didn't (map empty but maybe didn't try?), we need a flag?
-            // Let's assume if seriesFilesMap is populated, we use it. If not, we might fall back?
-            // Actually, if we stick to "pass files", processSeries shouldn't fetch. 
-            // So if batch fetch fails, we should perhaps loop and fill map? Or just handle inside processSeries (pass client).
-            // Let's change processSeries signature to accept `episodeFiles` (optional). If provided, use it. If not, fetch.
-
             // If we successfully batch fetched, use the files from map.
             // If batchFetchSucceeded is true but no files in map for this series, it means series has no files (pass empty array).
             // If batchFetchSucceeded is false, pass undefined so processSeries fetches individually.
@@ -688,6 +676,10 @@ export class SyncService {
 
     // --- Extracted Helpers ---
 
+    /**
+     * Process a single movie.
+     * @returns `true` if the movie was updated, `false` otherwise (including if an error occurred and was swallowed).
+     */
     private async processMovie(client: ArrClient, instance: RadarrInstance, movie: any, originalLanguages: string[], audioTags: AudioTagRule[], audioTagNameToId: Map<string, number>, targetTagId: number | null, isDryRun: boolean, originalProfileId?: number | null, dubProfileId?: number | null): Promise<boolean> {
         // Skip unmonitored if configured
         if (instance.onlyMonitored && !movie.monitored) return false;
@@ -806,6 +798,10 @@ export class SyncService {
         }
     }
 
+    /**
+     * Process a single series.
+     * @returns `true` if the series was updated, `false` otherwise (including if an error occurred and was swallowed).
+     */
     private async processSeries(client: ArrClient, instance: SonarrInstance, series: any, originalLanguages: string[], audioTags: AudioTagRule[], audioTagNameToId: Map<string, number>, targetTagId: number | null, isDryRun: boolean, originalProfileId?: number | null, dubProfileId?: number | null, preFetchedFiles?: any[]): Promise<boolean> {
         if (instance.onlyMonitored && !series.monitored) return false;
 

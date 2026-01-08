@@ -114,8 +114,33 @@ export function normalizeLanguage(lang: string): string {
     if (langLower.length < MAX_LENGTH_FOR_SUBSTRING_CHECK) {
         for (const [alias, canonicalName] of ALIAS_ENTRIES) {
             // Only match if alias is substantial (len > 2)
-            if (alias.length > MIN_ALIAS_LENGTH_FOR_MATCH && langLower.includes(alias)) {
-                return canonicalName;
+            if (alias.length > MIN_ALIAS_LENGTH_FOR_MATCH) {
+                // Create regex to match alias as a whole word or at boundaries, 
+                // but simpler: check if alias appears in the string.
+                // To avoid "spandex" matching "spa", we ideally want word boundaries.
+                // However, inputs might be messy like "English/German".
+                // But we already split by slash in `parseAudioLanguages`.
+                // So `langLower` here is likely "english" or "german" or "en".
+                // Logic to handle "Spanish (Latin America)":
+                // If alias is "spanish", it will match.
+
+                // If we strictly enforce word boundaries:
+                // "spanish" in "spanish (lat)" -> match
+                // "spa" in "spanish" -> match? "spa" is alias for spanish? Yes.
+                // Wait, "spa" is an alias for Spanish.
+                // If input is "Spanish", and we check alias "spa".
+                // "Spanish" includes "spa". So it returns Spanish. Correct.
+
+                // Re-visiting the issue: "spandex" matching "spa".
+                // If input is "spandex". "spa" is alias for "spanish".
+                // "spandex" includes "spa". Returns "spanish". INCORRECT.
+
+                // Solution: alias must be a word match?
+                // \b matches word boundary.
+                const regex = new RegExp(`\\b${alias}\\b`, 'i');
+                if (regex.test(langLower)) {
+                    return canonicalName;
+                }
             }
         }
     }
