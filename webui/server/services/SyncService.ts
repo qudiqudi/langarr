@@ -850,6 +850,7 @@ export class SyncService {
                     // Collect languages that are present in ALL episodes (intersection)
                     // Only tag the series if every episode with language data has the language
                     let commonLangsArr: string[] | null = null;
+                    let episodesWithAudioData = 0;
 
                     for (const file of episodeFiles) {
                         const detected = parseAudioLanguages(file.mediaInfo, file.languages);
@@ -857,12 +858,20 @@ export class SyncService {
                         // Skip files with no detected languages to prevent false negatives in intersection
                         if (detected.size === 0) continue;
 
+                        episodesWithAudioData++;
+
                         if (commonLangsArr === null) {
                             commonLangsArr = Array.from(detected);
                         } else {
                             // Intersection
                             commonLangsArr = commonLangsArr.filter(l => detected.has(l));
                         }
+                    }
+
+                    // Warning if metadata coverage is low (e.g. < 50% of files have audio data)
+                    const coverage = episodesWithAudioData / episodeFiles.length;
+                    if (episodeFiles.length > 5 && coverage < 0.5) {
+                        await this.log('warn', `Series ${series.title}: Low audio metadata coverage (${Math.round(coverage * 100)}%). Tags may be inaccurate.`, 'sync');
                     }
 
                     const commonLangs = new Set(commonLangsArr || []);

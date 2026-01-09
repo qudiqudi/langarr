@@ -116,6 +116,12 @@ it('should handle regex special characters in input gracefully (Security)', () =
     expect(normalizeLanguage('Test+')).toBe('test+');
 });
 
+it('should NOT match random substrings (Perf/Correctness)', () => {
+    // "spandex" contains "spa", but "spa" is alias for Spanish.
+    // We explicitly removed regex fallback, so this should NOT match Spanish.
+    expect(normalizeLanguage('spandex')).toBe('spandex');
+});
+
 it('should prioritise mediaInfo over fallback', () => {
     const mediaInfo = { audioLanguages: 'English' };
     const fallback = [{ name: 'French' }];

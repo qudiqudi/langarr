@@ -88,29 +88,8 @@ const LANGUAGE_ALIASES: Record<string, string> = {
 const ALIAS_ENTRIES = Object.entries(LANGUAGE_ALIASES);
 
 // Constants for normalization lookup optimization
-const MAX_LENGTH_FOR_SUBSTRING_CHECK = 20;
-const MIN_ALIAS_LENGTH_FOR_MATCH = 2;
-
-// Pre-compile regex matchers for performance
-interface Matcher {
-    regex: RegExp;
-    canonicalName: string;
-}
-
-const REGEX_MATCHERS: Matcher[] = [];
-
-// Initialize matchers once
-for (const [alias, canonicalName] of ALIAS_ENTRIES) {
-    if (alias.length > MIN_ALIAS_LENGTH_FOR_MATCH) {
-        // Escape alias to prevent regex injection (security fix)
-        const escapedAlias = alias.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        REGEX_MATCHERS.push({
-            // \b matches word boundary
-            regex: new RegExp(`\\b${escapedAlias}\\b`, 'i'),
-            canonicalName
-        });
-    }
-}
+// No more regex or substring checks needed - O(1) only
+const MIN_ALIAS_LENGTH_FOR_MATCH = 2; // Unused but kept if needed later, or remove
 
 export function normalizeLanguage(lang: string): string {
     const langLower = lang.toLowerCase().trim();
@@ -130,15 +109,9 @@ export function normalizeLanguage(lang: string): string {
         }
     }
 
-    // Fallback: Check if any known alias is a substring (only for short strings to avoid perf hit)
-    // Only used if direct lookup failed
-    if (langLower.length < MAX_LENGTH_FOR_SUBSTRING_CHECK) {
-        for (const matcher of REGEX_MATCHERS) {
-            if (matcher.regex.test(langLower)) {
-                return matcher.canonicalName;
-            }
-        }
-    }
+    // Fallback was removed for performance/correctness.
+    // We only rely on direct lookup or "Language (Variant)" format.
+    // If it's a random substring like "spandex" containing "spa", we intentionally DO NOT match it.
 
     // FAST FAIL for very long unknown strings or just return simplified
     return langLower; // Return as-is if no match
