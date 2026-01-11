@@ -6,6 +6,7 @@ import toast from 'react-hot-toast';
 import axios from 'axios';
 import InstanceModal from '@/components/Settings/InstanceModal';
 import ConfirmationModal from '@/components/Common/ConfirmationModal';
+import ProfileBadge from '@/components/Shared/ProfileBadge';
 
 interface RadarrInstance {
     id: number;
@@ -125,11 +126,11 @@ export default function RadarrSettings() {
                                                 <div className="mt-1 text-sm text-gray-300 space-y-1">
                                                     <div className="flex justify-between items-start gap-2">
                                                         <span className="text-gray-400 shrink-0">Original:</span>
-                                                        <span className="text-right">{instance.originalProfile}</span>
+                                                        <ProfileBadge type="original" label={instance.originalProfile} />
                                                     </div>
                                                     <div className="flex justify-between items-start gap-2">
                                                         <span className="text-gray-400 shrink-0">Dub:</span>
-                                                        <span className="text-right">{instance.dubProfile}</span>
+                                                        <ProfileBadge type="dub" label={instance.dubProfile} />
                                                     </div>
                                                 </div>
                                             </div>

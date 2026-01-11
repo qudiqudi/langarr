@@ -5,6 +5,7 @@ import { useStatus, useInstanceHealth } from '@/hooks/useStatus';
 import toast from 'react-hot-toast';
 import { ArrowPathIcon, SpeakerWaveIcon, BeakerIcon, CheckCircleIcon, XCircleIcon, FilmIcon, TvIcon, CloudIcon, PlayIcon } from '@heroicons/react/24/outline';
 import DryRunPreviewModal from '@/components/Dashboard/DryRunPreviewModal';
+import ProfileBadge from '@/components/Shared/ProfileBadge';
 
 // Helper function for relative time display
 function formatRelativeTime(dateString: string | null): string {
@@ -209,7 +210,7 @@ export default function DashboardPage() {
         </div>
 
         {instanceHealth?.instances && instanceHealth.instances.length > 0 ? (
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 xl:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4">
             {instanceHealth.instances.map((instance) => (
               <div
                 key={`${instance.type}-${instance.id}`}
@@ -237,50 +238,86 @@ export default function DashboardPage() {
                   </div>
                 </div>
 
-                {/* Last Touched Item */}
-                {instance.lastTouchedItem && (
-                  <div className="mt-3 pt-3 border-t border-gray-700/50">
-                    <div className="text-xs text-gray-500 mb-2">Last Updated</div>
-                    <div className="flex items-center gap-3">
-                      {instance.lastTouchedItem.poster ? (
-                        <Image
-                          src={instance.lastTouchedItem.poster}
-                          alt={instance.lastTouchedItem.title}
-                          width={44}
-                          height={64}
-                          className="rounded object-cover shadow-lg"
-                          onError={(e) => {
-                            (e.target as HTMLImageElement).style.display = 'none';
-                          }}
-                          unoptimized
-                        />
-                      ) : (
-                        <div className="h-16 w-11 rounded bg-gray-700 flex items-center justify-center">
-                          {instance.type === 'radarr' ? (
-                            <FilmIcon className="h-5 w-5 text-gray-500" />
-                          ) : (
-                            <TvIcon className="h-5 w-5 text-gray-500" />
-                          )}
-                        </div>
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <div className="text-base font-medium text-white truncate">
-                          {instance.lastTouchedItem.title}
-                        </div>
-                        {instance.lastTouchedItem.profile && (
-                          <div className="text-sm text-gray-400">
-                            → {instance.lastTouchedItem.profile}
+                {/* Last Updated Items History */}
+                {(() => {
+                  // Normalize items to a list, handling both new history array and legacy single item
+                  const items = instance.lastTouchedItems && instance.lastTouchedItems.length > 0
+                    ? instance.lastTouchedItems
+                    : (instance.lastTouchedItem ? [{
+                      ...instance.lastTouchedItem,
+                      profileType: null, // Legacy doesn't have type
+                      timestamp: instance.lastSyncAt // Use instance sync time as fallback
+                    }] : []);
+
+                  if (items.length === 0) return null;
+
+                  return (
+                    <div className="mt-3 pt-3 border-t border-gray-700/50">
+                      <div className="text-xs text-gray-500 mb-2">Last Updated ({items.length})</div>
+                      <div className="space-y-3">
+                        {items.slice(0, 5).map((item, idx) => (
+                          <div key={`${item.title}-${idx}`} className="flex items-start gap-3">
+                            {item.poster ? (
+                              <Image
+                                src={item.poster}
+                                alt={item.title}
+                                width={33}
+                                height={48}
+                                className="rounded object-cover shadow-lg shrink-0"
+                                onError={(e) => {
+                                  (e.target as HTMLImageElement).style.display = 'none';
+                                }}
+                                unoptimized
+                              />
+                            ) : (
+                              <div className="h-12 w-8.5 rounded bg-gray-700 flex items-center justify-center shrink-0">
+                                {instance.type === 'radarr' ? (
+                                  <FilmIcon className="h-4 w-4 text-gray-500" />
+                                ) : (
+                                  <TvIcon className="h-4 w-4 text-gray-500" />
+                                )}
+                              </div>
+                            )}
+                            <div className="flex-1 min-w-0">
+                              <div className="flex justify-between items-start">
+                                <span className="text-sm font-medium text-white truncate pr-2" title={item.title}>
+                                  {item.title}
+                                </span>
+                                {item.timestamp && (
+                                  <span className="text-[10px] text-gray-500 whitespace-nowrap pt-0.5">
+                                    {formatRelativeTime(item.timestamp)}
+                                  </span>
+                                )}
+                              </div>
+
+                              <div className="flex flex-wrap items-center gap-2 mt-0.5">
+                                {item.profile && (
+                                  // Use ProfileBadge if type is known, or try to infer it from instance settings
+                                  (() => {
+                                    const type = item.profileType ||
+                                      (item.profile === instance.originalProfile ? 'original' :
+                                        (item.profile === instance.dubProfile ? 'dub' : null));
+
+                                    return type ? (
+                                      <ProfileBadge type={type} label={item.profile} className="!text-[10px] !px-1.5 !py-0" />
+                                    ) : (
+                                      <span className="text-xs text-gray-400">→ {item.profile}</span>
+                                    );
+                                  })()
+                                )}
+                                {item.tags && (
+                                  <span className="text-[10px] text-blue-400 truncate">
+                                    {item.tags}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
                           </div>
-                        )}
-                        {instance.lastTouchedItem.tags && (
-                          <div className="text-xs text-blue-400 mt-0.5">
-                            Tags: {instance.lastTouchedItem.tags}
-                          </div>
-                        )}
+                        ))}
                       </div>
                     </div>
-                  </div>
-                )}
+                  );
+                })()}
 
                 {/* Error Message */}
                 {instance.error && (

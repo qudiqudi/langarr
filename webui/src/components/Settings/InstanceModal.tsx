@@ -265,22 +265,22 @@ export default function InstanceModal({ isOpen, onClose, onSave, instance, type 
                                             <h4 className="text-sm font-medium text-gray-200 mb-4">Profiles & Tags</h4>
                                             <div className="grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2">
                                                 <div>
-                                                    <label className="block text-sm font-medium leading-6 text-gray-300">Original Profile</label>
+                                                    <label className="block text-sm font-medium leading-6 text-cyan-400">Original Profile</label>
                                                     <select
                                                         {...formik.getFieldProps('originalProfile')}
                                                         disabled={loadingMetadata}
-                                                        className="mt-2 block w-full rounded-md border-0 bg-gray-800 py-1.5 text-white shadow-sm ring-1 ring-inset ring-gray-700 focus:ring-2 focus:ring-inset focus:ring-indigo-500 sm:text-sm sm:leading-6"
+                                                        className="mt-2 block w-full rounded-md border-0 bg-cyan-950/30 py-1.5 text-white shadow-sm ring-1 ring-inset ring-cyan-500/50 focus:ring-2 focus:ring-inset focus:ring-cyan-500 sm:text-sm sm:leading-6"
                                                     >
                                                         <option value="">Select Profile</option>
                                                         {profiles.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
                                                     </select>
                                                 </div>
                                                 <div>
-                                                    <label className="block text-sm font-medium leading-6 text-gray-300">Dub Profile</label>
+                                                    <label className="block text-sm font-medium leading-6 text-rose-400">Dub Profile</label>
                                                     <select
                                                         {...formik.getFieldProps('dubProfile')}
                                                         disabled={loadingMetadata}
-                                                        className="mt-2 block w-full rounded-md border-0 bg-gray-800 py-1.5 text-white shadow-sm ring-1 ring-inset ring-gray-700 focus:ring-2 focus:ring-inset focus:ring-indigo-500 sm:text-sm sm:leading-6"
+                                                        className="mt-2 block w-full rounded-md border-0 bg-rose-950/30 py-1.5 text-white shadow-sm ring-1 ring-inset ring-rose-500/50 focus:ring-2 focus:ring-inset focus:ring-rose-500 sm:text-sm sm:leading-6"
                                                     >
                                                         <option value="">Select Profile</option>
                                                         {profiles.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
