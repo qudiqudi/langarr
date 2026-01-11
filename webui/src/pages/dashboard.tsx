@@ -238,6 +238,11 @@ export default function DashboardPage() {
                             → {instance.lastTouchedItem.profile}
                           </div>
                         )}
+                        {instance.lastTouchedItem.tags && (
+                          <div className="text-xs text-blue-400 mt-0.5">
+                            Tags: {instance.lastTouchedItem.tags}
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>

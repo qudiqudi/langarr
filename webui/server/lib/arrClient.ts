@@ -6,7 +6,6 @@ export class ArrClient {
     constructor(baseUrl: string, apiKey: string) {
         // Ensure baseUrl doesn't end with slash and has /api/v3 (or appropriate version)
         const cleanUrl = baseUrl.replace(/\/$/, '');
-        console.log(`[ArrClient] Initializing for ${cleanUrl} with key length: ${apiKey?.length}`);
 
         // We'll rely on the caller to provide the full base URL including /api/v3 if needed, 
         // or we can append it. usually Radarr/Sonarr use /api/v3.
@@ -115,7 +114,7 @@ export class ArrClient {
      * If seriesId is omitted, attempts to fetch ALL episode files (if API supports it).
      */
     async getEpisodeFiles(seriesId?: number): Promise<any[]> {
-        const url = seriesId ? `/episodefile?seriesId=${seriesId}` : '/episodefile';
+        const url = seriesId ? `/api/v3/episodefile?seriesId=${seriesId}` : '/api/v3/episodefile';
         const { data } = await this.client.get(url);
         return data;
     }

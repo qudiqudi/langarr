@@ -209,7 +209,7 @@ export class SyncService {
         const targetTagId = instance.tagName ? (await this.getOrCreateTagId(client, instance.tagName, isDryRun)) : null;
 
         let processedCount = 0;
-        let lastTouchedItem: { title: string; poster: string | null; profile: string | null } | null = null;
+        let lastTouchedItem: { title: string; poster: string | null; profile: string | null, tags: string | null } | null = null;
 
         // Pre-resolve audio tag IDs to avoid lookups in loop
         const audioTagNameToId = await this.resolveAudioTagIds(client, audioTags, isDryRun);
@@ -218,18 +218,32 @@ export class SyncService {
         const profileIdToName: Record<number, string> = {};
         Object.entries(profileNameToId).forEach(([name, id]) => { profileIdToName[id] = name; });
 
+        // Create explicit map for Tag ID -> Tag Label
+        const tagIdToLabel: Record<number, string> = {};
+        const allTags = await client.getTags();
+        allTags.forEach((t: any) => { tagIdToLabel[t.id] = t.label; });
+
         for (const movie of clientSettings) {
-            const updated = await this.processMovie(client, instance, movie, originalLanguages, audioTags, audioTagNameToId, targetTagId, isDryRun, originalProfileId, dubProfileId);
+            // Updated processMovie signature to return object with updated flag and assigned tags
+            const { updated, assignedTags } = await this.processMovie(client, instance, movie, originalLanguages, audioTags, audioTagNameToId, targetTagId, isDryRun, originalProfileId, dubProfileId);
+
             if (updated) {
                 processedCount++;
                 // Determine which profile was assigned
                 const assignedProfileId = originalLanguages.includes(movie.originalLanguage?.code || '') ? originalProfileId : dubProfileId;
                 const profileName = assignedProfileId ? profileIdToName[assignedProfileId] : null;
+
+                // Resolve tag names
+                const tagNames = assignedTags
+                    ? assignedTags.map(id => tagIdToLabel[id]).filter(Boolean).join(', ')
+                    : null;
+
                 // Track last touched item for dashboard display
                 lastTouchedItem = {
                     title: movie.title || 'Unknown',
                     poster: movie.images?.find((img: any) => img.coverType === 'poster')?.remoteUrl || null,
-                    profile: profileName || null
+                    profile: profileName || null,
+                    tags: tagNames || null
                 };
             }
         }
@@ -243,6 +257,7 @@ export class SyncService {
                 instance.lastTouchedItemTitle = lastTouchedItem.title;
                 instance.lastTouchedItemPoster = lastTouchedItem.poster || undefined;
                 instance.lastTouchedItemProfile = lastTouchedItem.profile || undefined;
+                instance.lastTouchedItemTags = lastTouchedItem.tags || undefined;
             }
             await repo.save(instance);
         }
@@ -295,38 +310,26 @@ export class SyncService {
             : [];
 
         let processedCount = 0;
-        let lastTouchedItem: { title: string; poster: string | null; profile: string | null } | null = null;
+        let lastTouchedItem: { title: string; poster: string | null; profile: string | null, tags: string | null } | null = null;
 
         // Build reverse profile map (ID -> name) for display
         const profileIdToName: Record<number, string> = {};
         Object.entries(profileNameToId).forEach(([name, id]) => { profileIdToName[id] = name; });
 
+        // Create explicit map for Tag ID -> Tag Label
+        const tagIdToLabel: Record<number, string> = {};
+        const allTags = await client.getTags();
+        allTags.forEach((t: any) => { tagIdToLabel[t.id] = t.label; });
+
         // Pre-resolve audio tag IDs
         const audioTagNameToId = await this.resolveAudioTagIds(client, audioTags, isDryRun);
 
         // N+1 Fix: Fetch ALL episode files once if audio tagging is enabled
-        // This avoids 1 API call per series
+        // Sonarr v3 requires seriesId for /episodefile, so global fetch (optimization) is not possible.
+        // We revert to per-series fetching by initializing an empty map and setting success to false.
         const seriesFilesMap = new Map<number, any[]>();
         let batchFetchSucceeded = false;
-        if (audioTags.length > 0) {
-            try {
-                await this.log('info', `Fetching all episode files for ${instance.name} (N+1 optimization)...`);
-                const allFiles = await client.getEpisodeFiles(); // Using the new no-arg support
-
-                // Group by seriesId
-                for (const file of allFiles) {
-                    if (!seriesFilesMap.has(file.seriesId)) {
-                        seriesFilesMap.set(file.seriesId, []);
-                    }
-                    seriesFilesMap.get(file.seriesId)?.push(file);
-                }
-                batchFetchSucceeded = true;
-                await this.log('info', `Fetched ${allFiles.length} files for ${instance.name}`);
-            } catch (e: any) {
-                await this.log('warn', `Failed to batch fetch episode files (API might not support it), falling back to per-series: ${e.message}`);
-                batchFetchSucceeded = false;
-            }
-        }
+        // Optimization block removed for Sonarr compatibility.
 
         for (const series of allSeries) {
             // If we successfully batch fetched, use the files from map.
@@ -334,7 +337,7 @@ export class SyncService {
             // If batchFetchSucceeded is false, pass undefined so processSeries fetches individually.
             const preFetchedFiles = batchFetchSucceeded ? (seriesFilesMap.get(series.id) || []) : undefined;
 
-            const updated = await this.processSeries(client, instance, series, originalLanguages, audioTags, audioTagNameToId, targetTagId, isDryRun, originalProfileId, dubProfileId, preFetchedFiles);
+            const { updated, assignedTags } = await this.processSeries(client, instance, series, originalLanguages, audioTags, audioTagNameToId, targetTagId, isDryRun, originalProfileId, dubProfileId, preFetchedFiles);
             if (updated) {
                 processedCount++;
                 // Determine which profile was assigned
@@ -342,11 +345,18 @@ export class SyncService {
                 const langCode = ISO6391.getCode(langName) || 'xx';
                 const assignedProfileId = originalLanguages.includes(langCode) ? originalProfileId : dubProfileId;
                 const profileName = assignedProfileId ? profileIdToName[assignedProfileId] : null;
+
+                // Resolve tag names
+                const tagNames = assignedTags
+                    ? assignedTags.map(id => tagIdToLabel[id]).filter(Boolean).join(', ')
+                    : null;
+
                 // Track last touched item for dashboard display
                 lastTouchedItem = {
                     title: series.title || 'Unknown',
                     poster: series.images?.find((img: any) => img.coverType === 'poster')?.remoteUrl || null,
-                    profile: profileName || null
+                    profile: profileName || null,
+                    tags: tagNames || null
                 };
             }
         }
@@ -360,6 +370,7 @@ export class SyncService {
                 instance.lastTouchedItemTitle = lastTouchedItem.title;
                 instance.lastTouchedItemPoster = lastTouchedItem.poster || undefined;
                 instance.lastTouchedItemProfile = lastTouchedItem.profile || undefined;
+                instance.lastTouchedItemTags = lastTouchedItem.tags || undefined;
             }
             await repo.save(instance);
         }
@@ -678,11 +689,11 @@ export class SyncService {
 
     /**
      * Process a single movie.
-     * @returns `true` if the movie was updated, `false` otherwise (including if an error occurred and was swallowed).
+     * @returns Object containing `updated` flag and `assignedTags` (if updated).
      */
-    private async processMovie(client: ArrClient, instance: RadarrInstance, movie: any, originalLanguages: string[], audioTags: AudioTagRule[], audioTagNameToId: Map<string, number>, targetTagId: number | null, isDryRun: boolean, originalProfileId?: number | null, dubProfileId?: number | null): Promise<boolean> {
+    private async processMovie(client: ArrClient, instance: RadarrInstance, movie: any, originalLanguages: string[], audioTags: AudioTagRule[], audioTagNameToId: Map<string, number>, targetTagId: number | null, isDryRun: boolean, originalProfileId?: number | null, dubProfileId?: number | null): Promise<{ updated: boolean, assignedTags?: number[] }> {
         // Skip unmonitored if configured
-        if (instance.onlyMonitored && !movie.monitored) return false;
+        if (instance.onlyMonitored && !movie.monitored) return { updated: false };
 
         let needsUpdate = false;
         let newProfileId = movie.qualityProfileId;
@@ -769,12 +780,12 @@ export class SyncService {
                         });
                     }
                     // Swallow error to prevent stopping the entire sync (Phase 4 fix)
-                    return false;
+                    return { updated: false };
                 }
             }
-            return true;
+            return { updated: true, assignedTags: newTags };
         }
-        return false;
+        return { updated: false };
     }
 
     private async triggerMovieSearch(client: ArrClient, instance: RadarrInstance, movieId: number, movieTitle: string): Promise<void> {
@@ -800,10 +811,10 @@ export class SyncService {
 
     /**
      * Process a single series.
-     * @returns `true` if the series was updated, `false` otherwise (including if an error occurred and was swallowed).
+     * @returns Object containing `updated` flag and `assignedTags` (if updated).
      */
-    private async processSeries(client: ArrClient, instance: SonarrInstance, series: any, originalLanguages: string[], audioTags: AudioTagRule[], audioTagNameToId: Map<string, number>, targetTagId: number | null, isDryRun: boolean, originalProfileId?: number | null, dubProfileId?: number | null, preFetchedFiles?: any[]): Promise<boolean> {
-        if (instance.onlyMonitored && !series.monitored) return false;
+    private async processSeries(client: ArrClient, instance: SonarrInstance, series: any, originalLanguages: string[], audioTags: AudioTagRule[], audioTagNameToId: Map<string, number>, targetTagId: number | null, isDryRun: boolean, originalProfileId?: number | null, dubProfileId?: number | null, preFetchedFiles?: any[]): Promise<{ updated: boolean, assignedTags?: number[] }> {
+        if (instance.onlyMonitored && !series.monitored) return { updated: false };
 
         let needsUpdate = false;
         let newProfileId = series.qualityProfileId;
@@ -846,8 +857,16 @@ export class SyncService {
                     }
                 }
 
+                // Safety check: ensure we have an array
+                if (!Array.isArray(episodeFiles)) episodeFiles = [];
+
                 if (episodeFiles && episodeFiles.length > 0) {
                     // Collect languages that are present in ALL episodes (intersection)
+                    const episodeLangs: Set<string>[] = episodeFiles.map((file: any) => {
+                        const mediaInfo = file.mediaInfo;
+                        // Fallback logic for Sonarr file objects similar to Radarr
+                        return new Set(parseAudioLanguages(mediaInfo, file.languages));
+                    });
                     // Only tag the series if every episode with language data has the language
                     let commonLangsArr: string[] | null = null;
                     let episodesWithAudioData = 0;
@@ -918,12 +937,12 @@ export class SyncService {
                         });
                     }
                     // Swallow error to prevent stopping the entire sync
-                    return false;
+                    return { updated: false };
                 }
             }
-            return true;
+            return { updated: true, assignedTags: newTags };
         }
-        return false;
+        return { updated: false };
     }
 
     private async triggerSeriesSearch(client: ArrClient, instance: SonarrInstance, seriesId: number, seriesTitle: string): Promise<void> {

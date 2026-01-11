@@ -68,6 +68,9 @@ export class SonarrInstance {
   lastTouchedItemPoster?: string;
 
   @Column({ type: 'text', nullable: true })
+  lastTouchedItemTags?: string;
+
+  @Column({ type: 'text', nullable: true })
   lastTouchedItemProfile?: string;
 
   @CreateDateColumn()
@@ -110,6 +113,7 @@ export class SonarrInstance {
       lastTouchedItemTitle: this.lastTouchedItemTitle,
       lastTouchedItemPoster: this.lastTouchedItemPoster,
       lastTouchedItemProfile: this.lastTouchedItemProfile,
+      lastTouchedItemTags: this.lastTouchedItemTags,
       createdAt: this.createdAt,
       updatedAt: this.updatedAt,
     };

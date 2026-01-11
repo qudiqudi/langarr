@@ -56,7 +56,8 @@ const start = async () => {
 
     // In production, integration Next.js
     if (process.env.NODE_ENV === 'production') {
-      const nextApp = next({ dev: false, dir: path.resolve(__dirname, '..') });
+      // In production, compiled code is in dist/server, so root is ../../
+      const nextApp = next({ dev: false, dir: path.resolve(__dirname, '../..') });
       const handle = nextApp.getRequestHandler();
 
       await nextApp.prepare();

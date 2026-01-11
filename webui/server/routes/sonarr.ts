@@ -98,9 +98,7 @@ router.delete('/:id', async (req, res) => {
 // Test connection
 router.post('/test', async (req, res) => {
     try {
-        console.log('[Sonarr Test] Request body:', req.body);
         const { baseUrl, apiKey } = req.body;
-        console.log('[Sonarr Test] baseUrl:', baseUrl, 'apiKey:', apiKey ? '***' : 'undefined');
 
         if (!baseUrl || !apiKey) {
             return res.status(400).json({ error: 'Missing baseUrl or apiKey' });

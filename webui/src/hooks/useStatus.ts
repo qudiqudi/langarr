@@ -32,6 +32,7 @@ export interface LastTouchedItem {
     title: string;
     poster: string | null;
     profile: string | null;
+    tags: string | null;
 }
 
 export interface InstanceHealth {

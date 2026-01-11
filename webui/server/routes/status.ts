@@ -146,7 +146,8 @@ router.get('/instances', async (req, res) => {
                     lastTouchedItem: instance.lastTouchedItemTitle ? {
                         title: instance.lastTouchedItemTitle,
                         poster: instance.lastTouchedItemPoster || null,
-                        profile: instance.lastTouchedItemProfile || null
+                        profile: instance.lastTouchedItemProfile || null,
+                        tags: instance.lastTouchedItemTags || null
                     } : null
                 };
             } catch (error) {
@@ -162,7 +163,8 @@ router.get('/instances', async (req, res) => {
                     lastTouchedItem: instance.lastTouchedItemTitle ? {
                         title: instance.lastTouchedItemTitle,
                         poster: instance.lastTouchedItemPoster || null,
-                        profile: instance.lastTouchedItemProfile || null
+                        profile: instance.lastTouchedItemProfile || null,
+                        tags: instance.lastTouchedItemTags || null
                     } : null
                 };
             }
@@ -184,7 +186,8 @@ router.get('/instances', async (req, res) => {
                     lastTouchedItem: instance.lastTouchedItemTitle ? {
                         title: instance.lastTouchedItemTitle,
                         poster: instance.lastTouchedItemPoster || null,
-                        profile: instance.lastTouchedItemProfile || null
+                        profile: instance.lastTouchedItemProfile || null,
+                        tags: instance.lastTouchedItemTags || null
                     } : null
                 };
             } catch (error) {
@@ -200,7 +203,8 @@ router.get('/instances', async (req, res) => {
                     lastTouchedItem: instance.lastTouchedItemTitle ? {
                         title: instance.lastTouchedItemTitle,
                         poster: instance.lastTouchedItemPoster || null,
-                        profile: instance.lastTouchedItemProfile || null
+                        profile: instance.lastTouchedItemProfile || null,
+                        tags: instance.lastTouchedItemTags || null
                     } : null
                 };
             }
