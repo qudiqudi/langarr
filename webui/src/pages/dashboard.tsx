@@ -1,3 +1,4 @@
+import Image from 'next/image';
 import { useUser } from '@/hooks/useUser';
 import { useStatus, useInstanceHealth } from '@/hooks/useStatus';
 import toast from 'react-hot-toast';
@@ -212,13 +213,16 @@ export default function DashboardPage() {
                     <div className="text-xs text-gray-500 mb-2">Last Updated</div>
                     <div className="flex items-center gap-3">
                       {instance.lastTouchedItem.poster ? (
-                        <img
+                        <Image
                           src={instance.lastTouchedItem.poster}
                           alt={instance.lastTouchedItem.title}
-                          className="h-16 w-11 rounded object-cover shadow-lg"
+                          width={44}
+                          height={64}
+                          className="rounded object-cover shadow-lg"
                           onError={(e) => {
                             (e.target as HTMLImageElement).style.display = 'none';
                           }}
+                          unoptimized
                         />
                       ) : (
                         <div className="h-16 w-11 rounded bg-gray-700 flex items-center justify-center">
