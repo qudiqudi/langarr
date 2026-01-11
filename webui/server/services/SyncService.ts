@@ -253,6 +253,21 @@ export class SyncService {
         if (!isDryRun) {
             const repo = getRepository(RadarrInstance);
             instance.lastSyncAt = new Date();
+
+            // Validate lastTouchedItem still exists - clear if removed from Radarr
+            if (instance.lastTouchedItemTitle && !lastTouchedItem) {
+                const stillExists = clientSettings.some(
+                    (movie: any) => movie.title === instance.lastTouchedItemTitle
+                );
+                if (!stillExists) {
+                    instance.lastTouchedItemTitle = null as any;
+                    instance.lastTouchedItemPoster = null as any;
+                    instance.lastTouchedItemProfile = null as any;
+                    instance.lastTouchedItemTags = null as any;
+                    await this.log('info', `Cleared stale lastTouchedItem for ${instance.name} (item no longer in Radarr)`);
+                }
+            }
+
             if (lastTouchedItem) {
                 instance.lastTouchedItemTitle = lastTouchedItem.title;
                 instance.lastTouchedItemPoster = lastTouchedItem.poster || undefined;
@@ -366,6 +381,21 @@ export class SyncService {
         if (!isDryRun) {
             const repo = getRepository(SonarrInstance);
             instance.lastSyncAt = new Date();
+
+            // Validate lastTouchedItem still exists - clear if removed from Sonarr
+            if (instance.lastTouchedItemTitle && !lastTouchedItem) {
+                const stillExists = allSeries.some(
+                    (series: any) => series.title === instance.lastTouchedItemTitle
+                );
+                if (!stillExists) {
+                    instance.lastTouchedItemTitle = null as any;
+                    instance.lastTouchedItemPoster = null as any;
+                    instance.lastTouchedItemProfile = null as any;
+                    instance.lastTouchedItemTags = null as any;
+                    await this.log('info', `Cleared stale lastTouchedItem for ${instance.name} (item no longer in Sonarr)`);
+                }
+            }
+
             if (lastTouchedItem) {
                 instance.lastTouchedItemTitle = lastTouchedItem.title;
                 instance.lastTouchedItemPoster = lastTouchedItem.poster || undefined;
