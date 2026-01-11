@@ -142,13 +142,16 @@ router.get('/instances', async (req, res) => {
                     enabled: instance.enabled,
                     status: 'healthy',
                     url: instance.baseUrl,
+                    originalProfile: instance.originalProfile,
+                    dubProfile: instance.dubProfile,
                     lastSyncAt: instance.lastSyncAt || null,
                     lastTouchedItem: instance.lastTouchedItemTitle ? {
                         title: instance.lastTouchedItemTitle,
                         poster: instance.lastTouchedItemPoster || null,
                         profile: instance.lastTouchedItemProfile || null,
                         tags: instance.lastTouchedItemTags || null
-                    } : null
+                    } : null,
+                    lastTouchedItems: instance.lastTouchedItems || []
                 };
             } catch (error) {
                 return {
@@ -159,13 +162,16 @@ router.get('/instances', async (req, res) => {
                     status: 'unhealthy',
                     error: error instanceof Error ? error.message : 'Connection failed',
                     url: instance.baseUrl,
+                    originalProfile: instance.originalProfile,
+                    dubProfile: instance.dubProfile,
                     lastSyncAt: instance.lastSyncAt || null,
                     lastTouchedItem: instance.lastTouchedItemTitle ? {
                         title: instance.lastTouchedItemTitle,
                         poster: instance.lastTouchedItemPoster || null,
                         profile: instance.lastTouchedItemProfile || null,
                         tags: instance.lastTouchedItemTags || null
-                    } : null
+                    } : null,
+                    lastTouchedItems: instance.lastTouchedItems || []
                 };
             }
         }));
@@ -182,13 +188,16 @@ router.get('/instances', async (req, res) => {
                     enabled: instance.enabled,
                     status: 'healthy',
                     url: instance.baseUrl,
+                    originalProfile: instance.originalProfile,
+                    dubProfile: instance.dubProfile,
                     lastSyncAt: instance.lastSyncAt || null,
                     lastTouchedItem: instance.lastTouchedItemTitle ? {
                         title: instance.lastTouchedItemTitle,
                         poster: instance.lastTouchedItemPoster || null,
                         profile: instance.lastTouchedItemProfile || null,
                         tags: instance.lastTouchedItemTags || null
-                    } : null
+                    } : null,
+                    lastTouchedItems: instance.lastTouchedItems || []
                 };
             } catch (error) {
                 return {
@@ -199,13 +208,16 @@ router.get('/instances', async (req, res) => {
                     status: 'unhealthy',
                     error: error instanceof Error ? error.message : 'Connection failed',
                     url: instance.baseUrl,
+                    originalProfile: instance.originalProfile,
+                    dubProfile: instance.dubProfile,
                     lastSyncAt: instance.lastSyncAt || null,
                     lastTouchedItem: instance.lastTouchedItemTitle ? {
                         title: instance.lastTouchedItemTitle,
                         poster: instance.lastTouchedItemPoster || null,
                         profile: instance.lastTouchedItemProfile || null,
                         tags: instance.lastTouchedItemTags || null
-                    } : null
+                    } : null,
+                    lastTouchedItems: instance.lastTouchedItems || []
                 };
             }
         }));
