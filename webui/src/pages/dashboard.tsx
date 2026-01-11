@@ -1,8 +1,10 @@
 import Image from 'next/image';
+import { useState } from 'react';
 import { useUser } from '@/hooks/useUser';
 import { useStatus, useInstanceHealth } from '@/hooks/useStatus';
 import toast from 'react-hot-toast';
-import { ArrowPathIcon, SpeakerWaveIcon, BeakerIcon, CheckCircleIcon, XCircleIcon, FilmIcon, TvIcon, CloudIcon } from '@heroicons/react/24/outline';
+import { ArrowPathIcon, SpeakerWaveIcon, BeakerIcon, CheckCircleIcon, XCircleIcon, FilmIcon, TvIcon, CloudIcon, PlayIcon } from '@heroicons/react/24/outline';
+import DryRunPreviewModal from '@/components/Dashboard/DryRunPreviewModal';
 
 // Helper function for relative time display
 function formatRelativeTime(dateString: string | null): string {
@@ -25,6 +27,7 @@ export default function DashboardPage() {
   const { user } = useUser();
   const { status, loading, refreshStatus } = useStatus();
   const { instanceHealth, refreshInstanceHealth } = useInstanceHealth();
+  const [isDryRunModalOpen, setIsDryRunModalOpen] = useState(false);
 
   const handleAction = async (action: 'sync' | 'audio-scan' | 'dry-run') => {
     let endpoint = '/api/v1/actions/sync';
@@ -114,30 +117,57 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Action Buttons */}
-      <div className="flex gap-3">
-        <button
-          onClick={() => handleAction('sync')}
-          className="flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
-        >
-          <ArrowPathIcon className="h-4 w-4" />
-          Sync Now
-        </button>
-        <button
-          onClick={() => handleAction('audio-scan')}
-          className="flex items-center gap-2 rounded-md bg-gray-700 px-4 py-2 text-sm font-medium text-white hover:bg-gray-600 transition-colors"
-        >
-          <SpeakerWaveIcon className="h-4 w-4" />
-          Audio Scan
-        </button>
-        <button
-          onClick={() => handleAction('dry-run')}
-          className="flex items-center gap-2 rounded-md bg-yellow-600/20 px-4 py-2 text-sm font-medium text-yellow-500 hover:bg-yellow-600/30 transition-colors"
-        >
-          <BeakerIcon className="h-4 w-4" />
-          Dry-run Preview
-        </button>
+      {/* Quick Actions */}
+      <div>
+        <h2 className="mb-3 text-lg font-semibold text-white flex items-center gap-2">
+          <PlayIcon className="h-5 w-5 text-green-400" />
+          Quick Actions
+        </h2>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <button
+            onClick={() => handleAction('sync')}
+            className="group flex flex-col items-start gap-2 rounded-lg bg-gradient-to-br from-blue-600 to-blue-700 p-4 text-left hover:from-blue-500 hover:to-blue-600 transition-all shadow-lg hover:shadow-blue-500/20"
+          >
+            <div className="flex items-center gap-2">
+              <ArrowPathIcon className="h-5 w-5" />
+              <span className="font-semibold text-white">Sync Now</span>
+            </div>
+            <p className="text-xs text-blue-200">
+              Scan all instances and apply profile/tag changes immediately
+            </p>
+          </button>
+          <button
+            onClick={() => handleAction('audio-scan')}
+            className="group flex flex-col items-start gap-2 rounded-lg bg-gradient-to-br from-gray-700 to-gray-800 border border-gray-600 p-4 text-left hover:from-gray-600 hover:to-gray-700 hover:border-gray-500 transition-all"
+          >
+            <div className="flex items-center gap-2">
+              <SpeakerWaveIcon className="h-5 w-5 text-purple-400" />
+              <span className="font-semibold text-white">Audio Scan</span>
+            </div>
+            <p className="text-xs text-gray-400">
+              Analyze audio tracks and apply language-based tags
+            </p>
+          </button>
+          <button
+            onClick={() => setIsDryRunModalOpen(true)}
+            className="group flex flex-col items-start gap-2 rounded-lg bg-gradient-to-br from-yellow-600/20 to-yellow-700/10 border border-yellow-500/30 p-4 text-left hover:from-yellow-600/30 hover:to-yellow-700/20 hover:border-yellow-500/50 transition-all"
+          >
+            <div className="flex items-center gap-2">
+              <BeakerIcon className="h-5 w-5 text-yellow-500" />
+              <span className="font-semibold text-yellow-400">Dry-Run Preview</span>
+            </div>
+            <p className="text-xs text-yellow-500/70">
+              Preview changes without applying them to your library
+            </p>
+          </button>
+        </div>
       </div>
+
+      {/* Dry Run Preview Modal */}
+      <DryRunPreviewModal
+        isOpen={isDryRunModalOpen}
+        onClose={() => setIsDryRunModalOpen(false)}
+      />
 
       {/* Statistics Section */}
       <div>

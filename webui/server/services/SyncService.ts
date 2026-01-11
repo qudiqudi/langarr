@@ -50,6 +50,285 @@ export class SyncService {
         await this.log('info', 'Global sync completed.');
     }
 
+    /**
+     * Get a preview of what changes would be made in a dry run.
+     * Returns structured data for display in the UI.
+     */
+    async getDryRunPreview(): Promise<{
+        totalChanges: number;
+        actions: Array<{
+            type: 'movie' | 'series' | 'request';
+            instance: string;
+            title: string;
+            currentProfile?: string;
+            targetProfile?: string;
+            action: string;
+            newTags?: string[];
+        }>;
+    }> {
+        const actions: Array<{
+            type: 'movie' | 'series' | 'request';
+            instance: string;
+            title: string;
+            currentProfile?: string;
+            targetProfile?: string;
+            action: string;
+            newTags?: string[];
+        }> = [];
+
+        // Get settings for dry run
+        const settingsRepo = getRepository(Settings);
+        const settings = await settingsRepo.findOne({ where: { id: 1 } });
+        const audioTags = settings ? settings.getAudioTagRules() : [];
+
+        // Process Radarr instances
+        const radarrRepo = getRepository(RadarrInstance);
+        const radarrInstances = await radarrRepo.createQueryBuilder('instance')
+            .addSelect('instance.apiKey')
+            .where('instance.enabled = :enabled', { enabled: true })
+            .getMany();
+
+        for (const instance of radarrInstances) {
+            try {
+                const client = new ArrClient(instance.baseUrl, instance.apiKey);
+                const profiles = await client.getProfiles();
+                const profileNameToId: Record<string, number> = {};
+                const profileIdToName: Record<number, string> = {};
+                profiles.forEach((p: any) => {
+                    profileNameToId[p.name] = p.id;
+                    profileIdToName[p.id] = p.name;
+                });
+
+                const originalProfileId = profileNameToId[instance.originalProfile] ?? null;
+                const dubProfileId = profileNameToId[instance.dubProfile] ?? null;
+                const originalLanguages = instance.getOriginalLanguages();
+                const movies = await client.getMovies();
+
+                // Get audio tag rules if enabled for this instance
+                const instanceAudioTags = instance.audioTaggingEnabled ? audioTags : [];
+
+                // Pre-fetch all tags for resolution
+                const allTags = await client.getTags();
+                const tagIdToLabel: Record<number, string> = {};
+                const audioTagNameToId = new Map<string, number>();
+                allTags.forEach((t: any) => {
+                    tagIdToLabel[t.id] = t.label;
+                    // Map audio tag names to IDs
+                    const matchingRule = instanceAudioTags.find(rule => rule.tagName.toLowerCase() === t.label.toLowerCase());
+                    if (matchingRule) {
+                        audioTagNameToId.set(matchingRule.tagName, t.id);
+                    }
+                });
+
+                // Get target tag ID if configured
+                const targetTagId = instance.tagName ? allTags.find((t: any) => t.label.toLowerCase() === instance.tagName!.toLowerCase())?.id || null : null;
+
+                for (const movie of movies) {
+                    if (instance.onlyMonitored && !movie.monitored) continue;
+
+                    let metadataLangCode = 'xx';
+                    if (movie.originalLanguage) {
+                        if (typeof movie.originalLanguage === 'object' && movie.originalLanguage.code) {
+                            metadataLangCode = movie.originalLanguage.code;
+                        } else if (typeof movie.originalLanguage === 'object' && movie.originalLanguage.name) {
+                            metadataLangCode = ISO6391.getCode(movie.originalLanguage.name) || 'xx';
+                        } else if (typeof movie.originalLanguage === 'string') {
+                            if (movie.originalLanguage.length === 2) metadataLangCode = movie.originalLanguage;
+                            else metadataLangCode = ISO6391.getCode(movie.originalLanguage) || 'xx';
+                        }
+                    }
+
+                    const isOriginal = originalLanguages.includes(metadataLangCode);
+                    const targetProfileId = isOriginal ? originalProfileId : dubProfileId;
+                    const currentProfileName = profileIdToName[movie.qualityProfileId];
+                    const targetProfileName = targetProfileId ? profileIdToName[targetProfileId] : null;
+
+                    // Check for profile change
+                    const profileNeedsChange = targetProfileId && movie.qualityProfileId !== targetProfileId;
+
+                    // Check for tag changes
+                    let newTags = [...(movie.tags || [])];
+                    const newTagNames: string[] = [];
+
+                    // Target tag for dubs
+                    if (!isOriginal && targetTagId && !newTags.includes(targetTagId)) {
+                        newTags.push(targetTagId);
+                        newTagNames.push(tagIdToLabel[targetTagId] || instance.tagName || 'Unknown');
+                    }
+
+                    // Audio tags (requires movieFile with mediaInfo)
+                    if (movie.movieFile && instanceAudioTags.length > 0) {
+                        const mediaInfo = movie.movieFile.mediaInfo;
+                        const languagesFallback = movie.movieFile.languages;
+                        const detectedLanguages = parseAudioLanguages(mediaInfo, languagesFallback);
+
+                        const { newTags: updatedTags, hasChanges } = applyAudioTagChanges(detectedLanguages, instanceAudioTags, audioTagNameToId, newTags);
+                        if (hasChanges) {
+                            // Find newly added tags
+                            const addedTagIds = updatedTags.filter(id => !newTags.includes(id));
+                            addedTagIds.forEach(id => {
+                                const label = tagIdToLabel[id];
+                                if (label && !newTagNames.includes(label)) {
+                                    newTagNames.push(label);
+                                }
+                            });
+                            newTags = updatedTags;
+                        }
+                    }
+
+                    const tagNeedsChange = newTagNames.length > 0;
+
+                    // Only add action if something needs to change
+                    if (profileNeedsChange || tagNeedsChange) {
+                        let actionText = '';
+                        if (profileNeedsChange) {
+                            actionText = `Change profile: ${currentProfileName} → ${targetProfileName}`;
+                        }
+                        if (tagNeedsChange) {
+                            actionText = actionText ? `${actionText}; Add tags` : 'Add tags';
+                        }
+
+                        actions.push({
+                            type: 'movie',
+                            instance: instance.name,
+                            title: movie.title || 'Unknown Movie',
+                            currentProfile: profileNeedsChange ? currentProfileName : undefined,
+                            targetProfile: profileNeedsChange ? (targetProfileName || undefined) : undefined,
+                            action: actionText,
+                            newTags: tagNeedsChange ? newTagNames : undefined
+                        });
+                    }
+                }
+            } catch (err) {
+                console.error(`Error previewing Radarr ${instance.name}:`, err);
+            }
+        }
+
+        // Process Sonarr instances
+        const sonarrRepo = getRepository(SonarrInstance);
+        const sonarrInstances = await sonarrRepo.createQueryBuilder('instance')
+            .addSelect('instance.apiKey')
+            .where('instance.enabled = :enabled', { enabled: true })
+            .getMany();
+
+        for (const instance of sonarrInstances) {
+            try {
+                const client = new ArrClient(instance.baseUrl, instance.apiKey);
+                const profiles = await client.getProfiles();
+                const profileNameToId: Record<string, number> = {};
+                const profileIdToName: Record<number, string> = {};
+                profiles.forEach((p: any) => {
+                    profileNameToId[p.name] = p.id;
+                    profileIdToName[p.id] = p.name;
+                });
+
+                const originalProfileId = profileNameToId[instance.originalProfile] ?? null;
+                const dubProfileId = profileNameToId[instance.dubProfile] ?? null;
+                const originalLanguages = instance.getOriginalLanguages();
+                const allSeries = await client.getSeries();
+
+                // Get audio tag rules if enabled for this instance
+                const instanceAudioTags = instance.audioTaggingEnabled ? audioTags : [];
+
+                // Pre-fetch all tags for resolution
+                const allTags = await client.getTags();
+                const tagIdToLabel: Record<number, string> = {};
+                const audioTagNameToId = new Map<string, number>();
+                allTags.forEach((t: any) => {
+                    tagIdToLabel[t.id] = t.label;
+                    const matchingRule = instanceAudioTags.find(rule => rule.tagName.toLowerCase() === t.label.toLowerCase());
+                    if (matchingRule) {
+                        audioTagNameToId.set(matchingRule.tagName, t.id);
+                    }
+                });
+
+                // Get target tag ID if configured
+                const targetTagId = instance.tagName ? allTags.find((t: any) => t.label.toLowerCase() === instance.tagName!.toLowerCase())?.id || null : null;
+
+                for (const series of allSeries) {
+                    if (instance.onlyMonitored && !series.monitored) continue;
+
+                    const langName = series.originalLanguage?.name || series.originalLanguage || '';
+                    const langCode = ISO6391.getCode(langName) || 'xx';
+                    const isOriginal = originalLanguages.includes(langCode);
+                    const targetProfileId = isOriginal ? originalProfileId : dubProfileId;
+                    const currentProfileName = profileIdToName[series.qualityProfileId];
+                    const targetProfileName = targetProfileId ? profileIdToName[targetProfileId] : null;
+
+                    // Check for profile change
+                    const profileNeedsChange = targetProfileId && series.qualityProfileId !== targetProfileId;
+
+                    // Check for tag changes
+                    let newTags = [...(series.tags || [])];
+                    const newTagNames: string[] = [];
+
+                    // Target tag for dubs
+                    if (!isOriginal && targetTagId && !newTags.includes(targetTagId)) {
+                        newTags.push(targetTagId);
+                        newTagNames.push(tagIdToLabel[targetTagId] || instance.tagName || 'Unknown');
+                    }
+
+                    // Audio tags (Sonarr) - now enabled for accurate preview
+                    if (instanceAudioTags.length > 0) {
+                        try {
+                            const episodeFiles = await client.getEpisodeFiles(series.id);
+                            if (episodeFiles && episodeFiles.length > 0) {
+                                const commonLangs = this.calculateCommonAudioLanguages(episodeFiles);
+
+
+                                const { newTags: updatedTags, hasChanges } = applyAudioTagChanges(commonLangs, instanceAudioTags, audioTagNameToId, newTags);
+
+                                if (hasChanges) {
+                                    // Find newly added tags for display
+                                    const addedTagIds = updatedTags.filter(id => !newTags.includes(id));
+                                    addedTagIds.forEach(id => {
+                                        const label = tagIdToLabel[id];
+                                        if (label && !newTagNames.includes(label)) {
+                                            newTagNames.push(label);
+                                        }
+                                    });
+                                    newTags = updatedTags;
+                                }
+                            }
+                        } catch (err) {
+                            // Ignore error in preview
+                        }
+                    }
+
+                    const tagNeedsChange = newTagNames.length > 0;
+
+                    // Only add action if something needs to change
+                    if (profileNeedsChange || tagNeedsChange) {
+                        let actionText = '';
+                        if (profileNeedsChange) {
+                            actionText = `Change profile: ${currentProfileName} → ${targetProfileName}`;
+                        }
+                        if (tagNeedsChange) {
+                            actionText = actionText ? `${actionText}; Add tags` : 'Add tags';
+                        }
+
+                        actions.push({
+                            type: 'series',
+                            instance: instance.name,
+                            title: series.title || 'Unknown Series',
+                            currentProfile: profileNeedsChange ? currentProfileName : undefined,
+                            targetProfile: profileNeedsChange ? (targetProfileName || undefined) : undefined,
+                            action: actionText,
+                            newTags: tagNeedsChange ? newTagNames : undefined
+                        });
+                    }
+                }
+            } catch (err) {
+                console.error(`Error previewing Sonarr ${instance.name}:`, err);
+            }
+        }
+
+        return {
+            totalChanges: actions.length,
+            actions: actions.slice(0, 50) // Limit to 50 actions for UI performance
+        };
+    }
+
     async syncOverseerr(instanceId?: number, options?: SyncOptions) {
         const repo = getRepository(OverseerrInstance);
         const query = repo.createQueryBuilder('instance')
@@ -891,39 +1170,7 @@ export class SyncService {
                 if (!Array.isArray(episodeFiles)) episodeFiles = [];
 
                 if (episodeFiles && episodeFiles.length > 0) {
-                    // Collect languages that are present in ALL episodes (intersection)
-                    const episodeLangs: Set<string>[] = episodeFiles.map((file: any) => {
-                        const mediaInfo = file.mediaInfo;
-                        // Fallback logic for Sonarr file objects similar to Radarr
-                        return new Set(parseAudioLanguages(mediaInfo, file.languages));
-                    });
-                    // Only tag the series if every episode with language data has the language
-                    let commonLangsArr: string[] | null = null;
-                    let episodesWithAudioData = 0;
-
-                    for (const file of episodeFiles) {
-                        const detected = parseAudioLanguages(file.mediaInfo, file.languages);
-
-                        // Skip files with no detected languages to prevent false negatives in intersection
-                        if (detected.size === 0) continue;
-
-                        episodesWithAudioData++;
-
-                        if (commonLangsArr === null) {
-                            commonLangsArr = Array.from(detected);
-                        } else {
-                            // Intersection
-                            commonLangsArr = commonLangsArr.filter(l => detected.has(l));
-                        }
-                    }
-
-                    // Warning if metadata coverage is low (e.g. < 50% of files have audio data)
-                    const coverage = episodesWithAudioData / episodeFiles.length;
-                    if (episodeFiles.length > 5 && coverage < 0.5) {
-                        await this.log('warn', `Series ${series.title}: Low audio metadata coverage (${Math.round(coverage * 100)}%). Tags may be inaccurate.`, 'sync');
-                    }
-
-                    const commonLangs = new Set(commonLangsArr || []);
+                    const commonLangs = this.calculateCommonAudioLanguages(episodeFiles);
 
                     // Use helper
                     const { newTags: updatedTags, hasChanges } = applyAudioTagChanges(commonLangs, audioTags, audioTagNameToId, newTags);
@@ -996,6 +1243,36 @@ export class SyncService {
 
     /**
      * Process items in parallel with a concurrency limit
+     */
+    /**
+     * Calculate intersection of audio languages across episode files.
+     * Logic:
+     * - Collect languages from each file that has audio metadata.
+     * - Files WITHOUT audio metadata (e.g. not analyzed yet) are EXCLUDED from calculation.
+     * - Returns intersection of languages present in ALL valid files.
+     */
+    private calculateCommonAudioLanguages(episodeFiles: any[]): Set<string> {
+        let commonLangsArr: string[] | null = null;
+
+        for (const file of episodeFiles) {
+            const detected = parseAudioLanguages(file.mediaInfo, file.languages);
+
+            // Skip files with no detected languages (missing metadata or truly silent)
+            if (detected.size === 0) continue;
+
+            if (commonLangsArr === null) {
+                commonLangsArr = Array.from(detected);
+            } else {
+                // Intersection - only keep languages present in ALL valid files
+                commonLangsArr = commonLangsArr.filter(l => detected.has(l));
+            }
+        }
+
+        return new Set(commonLangsArr || []);
+    }
+
+    /**
+     * Process items in parallel with a concurrency limit.
      */
     private async processInParallel<T>(
         items: T[],
