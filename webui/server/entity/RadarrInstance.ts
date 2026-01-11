@@ -73,17 +73,6 @@ export class RadarrInstance {
   @Column({ type: 'text', nullable: true })
   lastTouchedItemProfile?: string;
 
-  // New: Store history of last 5 items
-  @Column({ type: 'simple-json', nullable: true })
-  lastTouchedItems?: Array<{
-    title: string;
-    poster: string | null;
-    profile: string | null;
-    profileType: 'original' | 'dub' | null;
-    tags: string | null;
-    timestamp: Date;
-  }>;
-
   @CreateDateColumn()
   createdAt!: Date;
 
@@ -125,7 +114,6 @@ export class RadarrInstance {
       lastTouchedItemPoster: this.lastTouchedItemPoster,
       lastTouchedItemProfile: this.lastTouchedItemProfile,
       lastTouchedItemTags: this.lastTouchedItemTags,
-      lastTouchedItems: this.lastTouchedItems,
       createdAt: this.createdAt,
       updatedAt: this.updatedAt,
     };

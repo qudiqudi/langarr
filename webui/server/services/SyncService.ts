@@ -62,7 +62,6 @@ export class SyncService {
             title: string;
             currentProfile?: string;
             targetProfile?: string;
-            targetProfileType?: 'original' | 'dub';
             action: string;
             newTags?: string[];
         }>;
@@ -73,7 +72,6 @@ export class SyncService {
             title: string;
             currentProfile?: string;
             targetProfile?: string;
-            targetProfileType?: 'original' | 'dub';
             action: string;
             newTags?: string[];
         }> = [];
@@ -196,7 +194,6 @@ export class SyncService {
                             title: movie.title || 'Unknown Movie',
                             currentProfile: profileNeedsChange ? currentProfileName : undefined,
                             targetProfile: profileNeedsChange ? (targetProfileName || undefined) : undefined,
-                            targetProfileType: profileNeedsChange ? (isOriginal ? 'original' : 'dub') : undefined,
                             action: actionText,
                             newTags: tagNeedsChange ? newTagNames : undefined
                         });
@@ -316,7 +313,6 @@ export class SyncService {
                             title: series.title || 'Unknown Series',
                             currentProfile: profileNeedsChange ? currentProfileName : undefined,
                             targetProfile: profileNeedsChange ? (targetProfileName || undefined) : undefined,
-                            targetProfileType: profileNeedsChange ? (isOriginal ? 'original' : 'dub') : undefined,
                             action: actionText,
                             newTags: tagNeedsChange ? newTagNames : undefined
                         });
@@ -528,19 +524,6 @@ export class SyncService {
                     profile: profileName || null,
                     tags: tagNames || null
                 };
-
-                // Add to history (new)
-                const newItem = {
-                    ...lastTouchedItem,
-                    profileType: (assignedProfileId === originalProfileId ? 'original' : (assignedProfileId === dubProfileId ? 'dub' : null)) as 'original' | 'dub' | null,
-                    timestamp: new Date()
-                };
-
-                const currentItems = instance.lastTouchedItems || [];
-                // Add to beginning
-                currentItems.unshift(newItem);
-                // Keep max 5
-                instance.lastTouchedItems = currentItems.slice(0, 5);
             }
         }
         await this.log('info', `${isDryRun ? '[DRY RUN] Would have updated' : 'Updated'} ${processedCount} movies for ${instance.name}`);
@@ -669,19 +652,6 @@ export class SyncService {
                     profile: profileName || null,
                     tags: tagNames || null
                 };
-
-                // Add to history (new)
-                const newItem = {
-                    ...lastTouchedItem,
-                    profileType: (assignedProfileId === originalProfileId ? 'original' : (assignedProfileId === dubProfileId ? 'dub' : null)) as 'original' | 'dub' | null,
-                    timestamp: new Date()
-                };
-
-                const currentItems = instance.lastTouchedItems || [];
-                // Add to beginning
-                currentItems.unshift(newItem);
-                // Keep max 5
-                instance.lastTouchedItems = currentItems.slice(0, 5);
             }
         }
         await this.log('info', `${isDryRun ? '[DRY RUN] Would have updated' : 'Updated'} ${processedCount} series for ${instance.name}`);

@@ -1,7 +1,6 @@
 import { Fragment, useRef, useState, useEffect } from 'react';
 import { Dialog, Transition } from '@headlessui/react';
 import { BeakerIcon, FilmIcon, TvIcon, ArrowPathIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline';
-import ProfileBadge from '@/components/Shared/ProfileBadge';
 
 interface DryRunAction {
     type: 'movie' | 'series' | 'request';
@@ -9,7 +8,6 @@ interface DryRunAction {
     title: string;
     currentProfile?: string;
     targetProfile?: string;
-    targetProfileType?: 'original' | 'dub';
     currentTags?: string[];
     newTags?: string[];
     action: string;
@@ -159,13 +157,8 @@ export default function DryRunPreviewModal({ isOpen, onClose }: DryRunPreviewMod
                                                                 {action.action}
                                                             </div>
                                                             {action.targetProfile && (
-                                                                <div className="flex items-center gap-1.5 mt-1">
-                                                                    <span className="text-xs text-blue-400">Profile: {action.currentProfile || 'Unknown'} →</span>
-                                                                    <ProfileBadge
-                                                                        type={action.targetProfileType || 'original'}
-                                                                        label={action.targetProfile}
-                                                                        className="scale-90 origin-left"
-                                                                    />
+                                                                <div className="text-xs text-blue-400 mt-1">
+                                                                    Profile: {action.currentProfile || 'Unknown'} → {action.targetProfile}
                                                                 </div>
                                                             )}
                                                             {action.newTags && action.newTags.length > 0 && (

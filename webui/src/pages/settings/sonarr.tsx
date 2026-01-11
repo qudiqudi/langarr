@@ -6,7 +6,6 @@ import toast from 'react-hot-toast';
 import axios from 'axios';
 import InstanceModal from '@/components/Settings/InstanceModal';
 import ConfirmationModal from '@/components/Common/ConfirmationModal';
-import ProfileBadge from '@/components/Shared/ProfileBadge';
 
 interface SonarrInstance {
     id: number;
@@ -126,11 +125,11 @@ export default function SonarrSettings() {
                                                 <div className="mt-1 text-sm text-gray-300 space-y-1">
                                                     <div className="flex justify-between items-start gap-2">
                                                         <span className="text-gray-400 shrink-0">Original:</span>
-                                                        <ProfileBadge type="original" label={instance.originalProfile} />
+                                                        <span className="text-right">{instance.originalProfile}</span>
                                                     </div>
                                                     <div className="flex justify-between items-start gap-2">
                                                         <span className="text-gray-400 shrink-0">Dub:</span>
-                                                        <ProfileBadge type="dub" label={instance.dubProfile} />
+                                                        <span className="text-right">{instance.dubProfile}</span>
                                                     </div>
                                                 </div>
                                             </div>

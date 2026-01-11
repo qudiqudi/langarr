@@ -43,14 +43,8 @@ export interface InstanceHealth {
     status: 'healthy' | 'unhealthy';
     error?: string;
     url: string;
-    originalProfile?: string;
-    dubProfile?: string;
     lastSyncAt: string | null;
     lastTouchedItem: LastTouchedItem | null;
-    lastTouchedItems?: Array<LastTouchedItem & {
-        profileType?: 'original' | 'dub' | null;
-        timestamp?: string;
-    }>;
 }
 
 export interface InstanceHealthResponse {
