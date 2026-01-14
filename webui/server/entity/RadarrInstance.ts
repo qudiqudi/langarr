@@ -81,7 +81,7 @@ export class RadarrInstance {
     profile: string | null;
     profileType: 'original' | 'dub' | null;
     tags: string | null;
-    timestamp: Date;
+    timestamp: string;
   }>;
 
   @CreateDateColumn()

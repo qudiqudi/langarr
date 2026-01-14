@@ -529,18 +529,9 @@ export class SyncService {
                     tags: tagNames || null
                 };
 
-                // Add to history (new)
-                const newItem = {
-                    ...lastTouchedItem,
-                    profileType: (assignedProfileId === originalProfileId ? 'original' : (assignedProfileId === dubProfileId ? 'dub' : null)) as 'original' | 'dub' | null,
-                    timestamp: new Date()
-                };
-
-                const currentItems = instance.lastTouchedItems || [];
-                // Add to beginning
-                currentItems.unshift(newItem);
-                // Keep max 5
-                instance.lastTouchedItems = currentItems.slice(0, 5);
+                // Add to history
+                const profileType = (assignedProfileId === originalProfileId ? 'original' : (assignedProfileId === dubProfileId ? 'dub' : null)) as 'original' | 'dub' | null;
+                this.addToHistory(instance, lastTouchedItem, profileType);
             }
         }
         await this.log('info', `${isDryRun ? '[DRY RUN] Would have updated' : 'Updated'} ${processedCount} movies for ${instance.name}`);
@@ -670,18 +661,9 @@ export class SyncService {
                     tags: tagNames || null
                 };
 
-                // Add to history (new)
-                const newItem = {
-                    ...lastTouchedItem,
-                    profileType: (assignedProfileId === originalProfileId ? 'original' : (assignedProfileId === dubProfileId ? 'dub' : null)) as 'original' | 'dub' | null,
-                    timestamp: new Date()
-                };
-
-                const currentItems = instance.lastTouchedItems || [];
-                // Add to beginning
-                currentItems.unshift(newItem);
-                // Keep max 5
-                instance.lastTouchedItems = currentItems.slice(0, 5);
+                // Add to history
+                const profileType = (assignedProfileId === originalProfileId ? 'original' : (assignedProfileId === dubProfileId ? 'dub' : null)) as 'original' | 'dub' | null;
+                this.addToHistory(instance, lastTouchedItem, profileType);
             }
         }
         await this.log('info', `${isDryRun ? '[DRY RUN] Would have updated' : 'Updated'} ${processedCount} series for ${instance.name}`);
@@ -748,6 +730,23 @@ export class SyncService {
             }
         }
         return audioTagNameToId;
+    }
+
+    private addToHistory(
+        instance: RadarrInstance | SonarrInstance,
+        item: { title: string; poster: string | null; profile: string | null, tags: string | null },
+        profileType: 'original' | 'dub' | null
+    ) {
+        const newItem = {
+            ...item,
+            profileType,
+            timestamp: new Date().toISOString()
+        };
+
+        // Create copy to avoid mutation issues
+        const currentItems = [...(instance.lastTouchedItems || [])];
+        currentItems.unshift(newItem);
+        instance.lastTouchedItems = currentItems.slice(0, 5);
     }
 
     // --- Overseerr Logic ---
