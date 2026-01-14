@@ -7,9 +7,6 @@ on:
       - develop
     tags:
       - 'v*'
-  pull_request:
-    branches:
-      - main
   workflow_dispatch:
 
 env:
@@ -17,11 +14,68 @@ env:
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
+  # Run CI checks before building Docker image
+  lint:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./webui
+    steps:
+      - uses: actions/checkout@v4
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: ./webui/package-lock.json
+      - run: npm ci
+        env:
+          HUSKY: 0
+      - run: npm run lint
+
+  type-check:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./webui
+    steps:
+      - uses: actions/checkout@v4
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: ./webui/package-lock.json
+      - run: npm ci
+        env:
+          HUSKY: 0
+      - run: npm run type-check
+
+  build-test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./webui
+    steps:
+      - uses: actions/checkout@v4
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: ./webui/package-lock.json
+      - run: npm ci
+        env:
+          HUSKY: 0
+      - run: npm run build
+
   build:
+    needs: [lint, type-check, build-test]
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
+      security-events: write
 
     steps:
       - name: Checkout repository
@@ -34,7 +88,6 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Log in to Container Registry
-        if: github.event_name != 'pull_request'
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
@@ -47,25 +100,40 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            # Branch-based tags
             type=ref,event=branch
-            type=ref,event=pr
-            # Version tags (from git tags v1.0.0)
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=semver,pattern={{major}}
-            # Latest tag (only for main branch AND version tags)
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v') }}
-            # Develop tag (only for develop branch)
             type=raw,value=develop,enable=${{ github.ref == 'refs/heads/develop' }}
 
+      # Single build for both scan and push - much faster!
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
+        id: build
         with:
-          context: ./language-tagger
+          context: ./webui
           platforms: linux/amd64,linux/arm64
-          push: ${{ github.event_name != 'pull_request' }}
+          push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          # Generate SBOM and provenance attestations
+          sbom: true
+          provenance: mode=max
+
+      # Scan the pushed image instead of building twice
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@0.33.1
+        with:
+          image-ref: '${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.ref_name }}'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'CRITICAL,HIGH'
+
+      - name: Upload Trivy scan results
+        uses: github/codeql-action/upload-sarif@v4
+        if: always()
+        with:
+          sarif_file: 'trivy-results.sarif'

@@ -1,0 +1,9 @@
+node_modules
+dist
+.next
+.git
+.DS_Store
+*.log
+langarr.db
+langarr.db-journal
+test-stack

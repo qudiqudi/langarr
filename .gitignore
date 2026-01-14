@@ -1,17 +1,7 @@
 # Environment and secrets
 .env
 
-# Python
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-*.egg-info/
-dist/
-build/
-
-# Docker
+# Logs
 *.log
 
 # IDE
@@ -25,5 +15,21 @@ build/
 .DS_Store
 Thumbs.db
 
-# Runtime
-*.lock
+# Local planning docs
+docs/
+
+# Local development stack
+test-stack/
+
+# SQLite databases
+config/*.db
+config/*.db-*
+
+# Claude settings
+.claude/
+
+# Agent
+.agent/
+
+# Scripts
+scripts/

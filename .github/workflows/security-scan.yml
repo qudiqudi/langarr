@@ -43,17 +43,17 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@0.33.1
         with:
           scan-type: 'fs'
-          scan-ref: './language-tagger'
+          scan-ref: './webui'
           format: 'sarif'
           output: 'trivy-results.sarif'
           severity: 'CRITICAL,HIGH'
           exit-code: '0'  # Report but don't fail - vulnerabilities show in Security tab
 
       - name: Upload Trivy results to GitHub Security
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         if: always()
         with:
           sarif_file: 'trivy-results.sarif'
@@ -132,32 +132,4 @@ jobs:
             echo "✅ No sensitive files or patterns detected."
           fi
 
-  docker-scan:
-    name: Docker Image Security Scan
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      security-events: write
 
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Build Docker image for scanning
-        run: |
-          docker build -t langarr-scan:latest ./language-tagger
-
-      - name: Run Trivy on Docker image
-        uses: aquasecurity/trivy-action@master
-        with:
-          image-ref: 'langarr-scan:latest'
-          format: 'sarif'
-          output: 'trivy-docker-results.sarif'
-          severity: 'CRITICAL,HIGH'
-          exit-code: '0'  # Don't fail, just report
-
-      - name: Upload Docker scan results
-        uses: github/codeql-action/upload-sarif@v3
-        if: always()
-        with:
-          sarif_file: 'trivy-docker-results.sarif'

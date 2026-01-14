@@ -1,0 +1,46 @@
+# Automatically label PRs based on changed files
+
+area/frontend:
+  - changed-files:
+    - any-glob-to-any-file:
+      - webui/src/**/*
+      - webui/public/**/*
+
+area/backend:
+  - changed-files:
+    - any-glob-to-any-file: webui/server/**/*
+
+area/database:
+  - changed-files:
+    - any-glob-to-any-file:
+      - webui/server/entity/**/*
+      - webui/server/datasource.ts
+
+area/api:
+  - changed-files:
+    - any-glob-to-any-file: webui/server/routes/**/*
+
+area/docker:
+  - changed-files:
+    - any-glob-to-any-file:
+      - webui/Dockerfile
+      - docker-compose.yml
+      - .dockerignore
+
+area/ci:
+  - changed-files:
+    - any-glob-to-any-file:
+      - .github/workflows/**/*
+      - .github/dependabot.yml
+
+area/docs:
+  - changed-files:
+    - any-glob-to-any-file:
+      - '**/*.md'
+      - docs/**/*
+
+dependencies:
+  - changed-files:
+    - any-glob-to-any-file:
+      - webui/package.json
+      - webui/package-lock.json
