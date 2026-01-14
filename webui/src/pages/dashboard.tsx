@@ -6,7 +6,6 @@ import DryRunPreviewModal from '@/components/Dashboard/DryRunPreviewModal';
 
 // Components
 import StatusHero from '@/components/Dashboard/StatusHero';
-import StatsGrid from '@/components/Dashboard/StatsGrid';
 import QuickActions from '@/components/Dashboard/QuickActions';
 import InstanceList from '@/components/Dashboard/InstanceList';
 import ActivityFeed from '@/components/Dashboard/ActivityFeed';
@@ -58,25 +57,21 @@ export default function DashboardPage() {
       {/* Hero Status */}
       <StatusHero status={status} />
 
-      {/* Main Grid Layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      {/* Main Content Flow */}
+      <div className="flex flex-col gap-8">
 
-        {/* Left Column (Stats & Actions) */}
-        <div className="lg:col-span-2 space-y-8">
-          <StatsGrid status={status} />
-          <QuickActions
-            onSync={handleSync}
-            onDryRun={() => setIsDryRunModalOpen(true)}
-          />
-          <InstanceList health={instanceHealth} />
-        </div>
+        {/* Actions Bar */}
+        <QuickActions
+          onSync={handleSync}
+          onDryRun={() => setIsDryRunModalOpen(true)}
+        />
 
-        {/* Right Column (Activity Feed - Sticky on Desktop) */}
-        <div className="lg:col-span-1">
-          <div className="sticky top-6">
-            <ActivityFeed activity={status?.recentActivity} />
-          </div>
-        </div>
+        {/* Instance List & Stats */}
+        <InstanceList health={instanceHealth} status={status} />
+
+        {/* Recent Activity */}
+        <ActivityFeed activity={status?.recentActivity} />
+
       </div>
 
       {/* Modals */}

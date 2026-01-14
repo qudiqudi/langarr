@@ -1,10 +1,11 @@
 import Image from 'next/image';
-import { InstanceHealth, InstanceHealthResponse } from '@/hooks/useStatus';
+import { InstanceHealth, InstanceHealthResponse, SystemStatus } from '@/hooks/useStatus';
 import ProfileBadge from '@/components/Shared/ProfileBadge';
 import { FilmIcon, TvIcon, CloudIcon, CheckCircleIcon, XCircleIcon, ArrowRightIcon } from '@heroicons/react/24/outline';
 
 interface InstanceListProps {
     health: InstanceHealthResponse | null;
+    status?: SystemStatus | null;
 }
 
 // --- Helper Functions & Components ---
@@ -58,7 +59,7 @@ function InstanceHistory({ instance }: { instance: InstanceHealth }) {
             ...instance.lastTouchedItem,
             profileType: null,
             timestamp: instance.lastSyncAt
-        } as any] : []); // Cast simple item to avoid type conflicts if needed
+        } as HistoryItem] : []); // Cast simple item to avoid type conflicts if needed
 
     if (items.length === 0) return null;
 
@@ -101,7 +102,7 @@ function InstanceHistory({ instance }: { instance: InstanceHealth }) {
                                     <InstanceProfileBadge item={item} instance={instance} />
                                 )}
                                 {item.tags && (
-                                    <span className="text-[10px] text-blue-400 bg-blue-400/10 px-1.5 py-0.5 rounded border border-blue-400/20 truncate max-w-[120px]">
+                                    <span className="text-[10px] text-blue-400 bg-blue-400/10 px-1.5 py-0.5 rounded border border-blue-400/20 break-words whitespace-normal">
                                         {item.tags}
                                     </span>
                                 )}
@@ -116,7 +117,7 @@ function InstanceHistory({ instance }: { instance: InstanceHealth }) {
 
 // --- Main Component ---
 
-export default function InstanceList({ health }: InstanceListProps) {
+export default function InstanceList({ health, status }: InstanceListProps) {
     const getTypeIcon = (type: string) => {
         switch (type) {
             case 'radarr': return <FilmIcon className="h-5 w-5 text-blue-400" />;
@@ -129,7 +130,7 @@ export default function InstanceList({ health }: InstanceListProps) {
     if (!health) return null;
 
     return (
-        <div className="space-y-4">
+        <div className="space-y-6">
             <div className="flex items-center justify-between">
                 <h3 className="text-sm font-medium text-gray-400 uppercase tracking-wider">Instance Status</h3>
                 {health.summary && (
@@ -148,54 +149,75 @@ export default function InstanceList({ health }: InstanceListProps) {
                 )}
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                {/* Note: Grid layout for cards on large screens */}
-                {health.instances.map((instance) => (
-                    <div
-                        key={`${instance.type}-${instance.id}`}
-                        className="group relative flex flex-col rounded-2xl bg-gray-900 border border-gray-800 p-5 hover:border-gray-700 hover:shadow-xl transition-all"
-                    >
-                        {/* Header */}
-                        <div className="flex items-center justify-between mb-4">
-                            <div className="flex items-center gap-3">
-                                <div className="p-2 rounded-lg bg-gray-800 group-hover:bg-gray-700 transition-colors">
-                                    {getTypeIcon(instance.type)}
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                {/* Note: 2-column layout for better balance of space and density */}
+                {health.instances.map((instance) => {
+                    let statLabel = '';
+                    let statValue: number | string | undefined;
+
+                    if (instance.type === 'radarr' && status?.statistics?.totalMovies) {
+                        statLabel = 'Movies';
+                        statValue = status.statistics.totalMovies;
+                    } else if (instance.type === 'sonarr' && status?.statistics?.totalSeries) {
+                        statLabel = 'Series';
+                        statValue = status.statistics.totalSeries;
+                    }
+
+                    return (
+                        <div
+                            key={`${instance.type}-${instance.id}`}
+                            className="group relative flex flex-col rounded-2xl bg-gray-900 border border-gray-800 p-5 hover:border-gray-700 hover:shadow-xl transition-all"
+                        >
+                            {/* Header */}
+                            <div className="flex items-center justify-between mb-4">
+                                <div className="flex items-center gap-3">
+                                    <div className="p-2 rounded-lg bg-gray-800 group-hover:bg-gray-700 transition-colors">
+                                        {getTypeIcon(instance.type)}
+                                    </div>
+                                    <div>
+                                        <h4 className="font-semibold text-white">{instance.name}</h4>
+                                        <p className="text-xs text-gray-500 capitalize">{instance.type} Instance</p>
+                                    </div>
                                 </div>
+                                <div className={`flex h-2.5 w-2.5 rounded-full ${instance.status === 'healthy' ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.4)]' : 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.4)]'}`} />
+                            </div>
+
+                            {/* Stats / Info */}
+                            <div className="grid grid-cols-2 gap-4 py-3 border-t border-b border-gray-800/50 mb-1">
                                 <div>
-                                    <h4 className="font-semibold text-white">{instance.name}</h4>
-                                    <p className="text-xs text-gray-500 capitalize">{instance.type} Instance</p>
+                                    <span className="text-xs text-gray-500 block mb-0.5">Last Sync</span>
+                                    <span className="text-sm font-medium text-gray-300">{formatRelativeTime(instance.lastSyncAt)}</span>
                                 </div>
+                                {statValue !== undefined && (
+                                    <div>
+                                        <span className="text-xs text-gray-500 block mb-0.5">{statLabel}</span>
+                                        <span className="text-sm font-medium text-white">{statValue.toLocaleString()}</span>
+                                    </div>
+                                )}
                             </div>
-                            <div className={`flex h-2.5 w-2.5 rounded-full ${instance.status === 'healthy' ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.4)]' : 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.4)]'}`} />
-                        </div>
 
-                        {/* Stats / Info */}
-                        <div className="flex items-center justify-between py-3 border-t border-b border-gray-800/50 mb-1">
-                            <span className="text-xs text-gray-500">Last Sync</span>
-                            <span className="text-sm font-medium text-gray-300">{formatRelativeTime(instance.lastSyncAt)}</span>
-                        </div>
+                            {/* Error Message */}
+                            {instance.error && (
+                                <div className="mb-4 rounded-lg bg-red-500/10 border border-red-500/20 p-3">
+                                    <p className="text-xs text-red-400 font-medium break-all">{instance.error}</p>
+                                </div>
+                            )}
 
-                        {/* Error Message */}
-                        {instance.error && (
-                            <div className="mb-4 rounded-lg bg-red-500/10 border border-red-500/20 p-3">
-                                <p className="text-xs text-red-400 font-medium break-all">{instance.error}</p>
+                            {/* History Feed */}
+                            <div className="flex-1">
+                                <InstanceHistory instance={instance} />
                             </div>
-                        )}
 
-                        {/* History Feed */}
-                        <div className="flex-1">
-                            <InstanceHistory instance={instance} />
-                        </div>
-
-                        {/* Bottom Glow */}
-                        <div className={`absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r opacity-50 rounded-b-2xl
+                            {/* Bottom Glow */}
+                            <div className={`absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r opacity-50 rounded-b-2xl
                 ${instance.type === 'radarr' ? 'from-blue-500/0 via-blue-500/50 to-blue-500/0' :
-                                instance.type === 'sonarr' ? 'from-purple-500/0 via-purple-500/50 to-purple-500/0' :
-                                    'from-amber-500/0 via-amber-500/50 to-amber-500/0'
-                            }`}
-                        />
-                    </div>
-                ))}
+                                    instance.type === 'sonarr' ? 'from-purple-500/0 via-purple-500/50 to-purple-500/0' :
+                                        'from-amber-500/0 via-amber-500/50 to-amber-500/0'
+                                }`}
+                            />
+                        </div>
+                    );
+                })}
             </div>
 
             {health.instances.length === 0 && (
