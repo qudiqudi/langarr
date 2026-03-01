@@ -271,11 +271,12 @@ class WebhookServer:
                 # Update the item with correct profile
                 if arr.update_item(item, add_tag=should_dub):
                     logger.info(f"[{arr.name}] ✓ Updated {media_type} ID {item_id} → {correct_profile_name}")
-
-                    # Trigger search
-                    arr.trigger_search_for_item(item_id, endpoint)
                 else:
-                    logger.debug(f"[{arr.name}] No update needed for {media_type} ID {item_id}")
+                    logger.info(f"[{arr.name}] No update needed for {media_type} ID {item_id}")
+
+                # Always trigger search for webhook requests so the item starts downloading,
+                # bypassing trigger_search_on_update since webhook events represent explicit user intent
+                arr.trigger_search_for_item(item_id, endpoint, force=True)
 
         except Exception as e:
             logger.error(f"Error processing media request: {e}", exc_info=True)

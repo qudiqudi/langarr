@@ -43,7 +43,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@0.28.0
         with:
           scan-type: 'fs'
           scan-ref: './language-tagger'
@@ -51,6 +51,7 @@ jobs:
           output: 'trivy-results.sarif'
           severity: 'CRITICAL,HIGH'
           exit-code: '0'  # Report but don't fail - vulnerabilities show in Security tab
+          version: 'v0.69.2'
 
       - name: Upload Trivy results to GitHub Security
         uses: github/codeql-action/upload-sarif@v3
@@ -148,13 +149,14 @@ jobs:
           docker build -t langarr-scan:latest ./language-tagger
 
       - name: Run Trivy on Docker image
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@0.28.0
         with:
           image-ref: 'langarr-scan:latest'
           format: 'sarif'
           output: 'trivy-docker-results.sarif'
           severity: 'CRITICAL,HIGH'
           exit-code: '0'  # Don't fail, just report
+          version: 'v0.69.2'
 
       - name: Upload Docker scan results
         uses: github/codeql-action/upload-sarif@v3

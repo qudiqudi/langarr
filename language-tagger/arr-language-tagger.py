@@ -153,18 +153,19 @@ class ArrInstance(APIClient):
         """Make PUT request to Arr API (v3)."""
         return super()._put(f"api/v3/{endpoint}", data, **kwargs)
 
-    def trigger_search_for_item(self, item_id: int, endpoint: str) -> bool:
+    def trigger_search_for_item(self, item_id: int, endpoint: str, force: bool = False) -> bool:
         """
         Trigger automatic search for specific item after profile update.
 
         Args:
             item_id: The movie or series ID
             endpoint: 'movie' or 'series'
+            force: If True, bypass the trigger_search_on_update flag (used for webhook-triggered searches)
 
         Returns:
             True if search was triggered, False if skipped
         """
-        if not self.trigger_search_on_update:
+        if not self.trigger_search_on_update and not force:
             return False
 
         # Check per-item cooldown
