@@ -151,9 +151,17 @@ class ArrInstance(APIClient):
         # missing until fetcharr or a manual search reaches it).
         # CONFIG_PATH is expected to be a file path; if a user points it at
         # a directory we'd otherwise land the state file in the filesystem
-        # root, so detect that case via the file-suffix heuristic.
+        # root. Prefer a real filesystem check; fall back to the suffix
+        # heuristic for the first-deploy case where the file may not exist
+        # yet (the heuristic misfires only on extensionless config files,
+        # which we treat as an unsupported edge case).
         config_path = Path(os.environ.get('CONFIG_PATH', '/config/config.yml'))
-        state_dir = config_path.parent if config_path.suffix else config_path
+        if config_path.is_file():
+            state_dir = config_path.parent
+        elif config_path.is_dir():
+            state_dir = config_path
+        else:
+            state_dir = config_path.parent if config_path.suffix else config_path
         self.state_file = state_dir / f'.langarr-last-run-{self.service_type}-{self.name}.json'
         self.last_run_time: Optional[datetime] = self._load_last_run_time()
 
@@ -186,9 +194,10 @@ class ArrInstance(APIClient):
         """
         now = datetime.now(timezone.utc)
         if self.dry_run:
-            # Update in-memory only — dry-run shouldn't touch disk
+            # Don't advance state in dry-run, in memory OR on disk. The user
+            # expects a dry-run to be observable across multiple iterations
+            # without altering what a subsequent real run would do.
             logger.info(f"[{self.name}] [DRY-RUN] Skipping state file write at {self.state_file}")
-            self.last_run_time = now
             return
         try:
             self.state_file.parent.mkdir(parents=True, exist_ok=True)
@@ -213,7 +222,18 @@ class ArrInstance(APIClient):
         # raise TypeError.
         if added_dt.tzinfo is None:
             added_dt = added_dt.replace(tzinfo=timezone.utc)
-        return added_dt > self.last_run_time
+        if added_dt <= self.last_run_time:
+            return False
+        # If a webhook-triggered (or earlier) langarr action already searched
+        # this item since the previous scheduled-run bookmark, don't re-fire.
+        # last_triggered_searches stores Unix epoch floats and is wiped on
+        # restart — across a process restart we may still fire a duplicate,
+        # but Radarr/Sonarr no-op when the file is already grabbed.
+        item_id = item.get('id')
+        prior_search = self.last_triggered_searches.get(item_id)
+        if prior_search and prior_search > self.last_run_time.timestamp():
+            return False
+        return True
 
     def trigger_search_for_item(self, item_id: int, endpoint: str, force: bool = False) -> bool:
         """
@@ -691,6 +711,8 @@ class ArrInstance(APIClient):
             else:
                 logger.info(f"[{self.name}]   Updated: {stats['updated']}")
             logger.info(f"[{self.name}]   Already correct: {stats['skipped']}")
+            if stats.get('searched_new'):
+                logger.info(f"[{self.name}]   Newly-added searched: {stats['searched_new']}")
             logger.info(f"[{self.name}]   Total: {stats['total']}")
             logger.info(f"[{self.name}] {'='*60}")
 

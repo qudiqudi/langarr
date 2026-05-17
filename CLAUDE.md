@@ -230,6 +230,9 @@ After updating profiles, the script can optionally trigger automatic searches in
 - Per-item cooldown (default: 60s)
 - Global rate limiting (default: 5s between searches)
 - Configurable per instance
+- `trigger_search_on_new` (default: true) also searches items added since the previous scheduled run, even when no profile change was needed. State is persisted at `<config_dir>/.langarr-last-run-<service>-<name>.json`.
+
+**Sonarr note:** `trigger_search_on_new` fires a `SeriesSearch` per newly-added series, which can be broad for long-running shows (one command, but Sonarr internally searches all monitored episodes). The `search_cooldown_seconds` and `min_search_interval_seconds` throttle the dispatch; set `trigger_search_on_new: false` to opt out entirely.
 
 ### Webhook Flow
 ```
