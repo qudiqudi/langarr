@@ -145,14 +145,7 @@ class ArrInstance(APIClient):
         self.last_triggered_searches = {}  # {item_id: timestamp}
         self.last_any_search = 0
 
-        # Per-instance state: timestamp of the previous run, used to detect
-        # items added since then so we can fire a search for them even when
-        # no profile/tag change was needed (e.g. Seerr added a movie with
-        # the correct profile already — without this, the item would sit
-        # missing until fetcharr or a manual search reaches it).
-        # state_dir is normally passed in by ArrLanguageTagger (single
-        # source of truth for path resolution). The CONFIG_PATH fallback
-        # below exists only for direct/test instantiation.
+        # Bookmark previous-run time so newly-added items get searched even when no profile change was needed.
         if state_dir is None:
             state_dir = self._resolve_state_dir_from_env()
         self.state_file = state_dir / f'.langarr-last-run-{self.service_type}-{self.name}.json'
@@ -172,24 +165,13 @@ class ArrInstance(APIClient):
 
     @staticmethod
     def _resolve_state_dir_from_env() -> Path:
-        """Fallback resolution of the state directory from CONFIG_PATH.
-
-        This path is only used when an ArrInstance is constructed directly
-        (tests / one-offs). In production, ArrLanguageTagger.init_instances
-        passes state_dir explicitly so this code does not run.
-
-        Prefer filesystem-type checks; fall back to a suffix heuristic for
-        the first-deploy case where the file doesn't exist yet.
-        """
+        """Test/standalone fallback; production uses ArrLanguageTagger-supplied state_dir."""
         config_path = Path(os.environ.get('CONFIG_PATH', '/config/config.yml'))
         if config_path.is_file():
             return config_path.parent
         if config_path.is_dir():
             return config_path
-        # Path doesn't exist yet (first deploy). Suffix presence is an
-        # imperfect proxy for "this is meant to be a file" — misfires on
-        # extensionless files like `/config/data`, which we treat as an
-        # unsupported edge case in this fallback only.
+        # First-deploy fallback: suffix as a proxy, misfires on extensionless files.
         return config_path.parent if config_path.suffix else config_path
 
     def _load_last_run_time(self) -> Optional[datetime]:
@@ -201,31 +183,18 @@ class ArrInstance(APIClient):
             return None
 
     def _save_last_run_time(self) -> None:
-        """Persist current run time so the next run knows what's 'new'.
-
-        Also updates the in-memory value so subsequent runs in the same
-        long-lived process pick up the new bookmark (the scheduled-mode
-        process loops without re-running __init__).
-        """
+        """Persist run time; in-memory bookmark advances only on successful write."""
         now = datetime.now(timezone.utc)
         if self.dry_run:
-            # Don't advance state in dry-run, in memory OR on disk. The user
-            # expects a dry-run to be observable across multiple iterations
-            # without altering what a subsequent real run would do.
+            # Dry-run is observable across iterations: don't touch bookmark anywhere.
             logger.info(f"[{self.name}] [DRY-RUN] Skipping state file write at {self.state_file}")
             return
         try:
             self.state_file.parent.mkdir(parents=True, exist_ok=True)
-            # write-then-rename: atomic on POSIX, so a crash mid-write
-            # leaves the previous bookmark intact rather than truncating
-            # to invalid JSON.
+            # write-then-rename: atomic on POSIX so a crash mid-write preserves the previous bookmark.
             tmp = self.state_file.with_suffix(self.state_file.suffix + '.tmp')
             tmp.write_text(json.dumps({'last_run': now.isoformat()}))
             tmp.replace(self.state_file)
-            # Only advance the in-memory bookmark when the on-disk write
-            # succeeded. If the volume is read-only or otherwise unwritable
-            # the next run should re-evaluate the same items rather than
-            # silently skipping them based on a memory-only bookmark.
             self.last_run_time = now
         except OSError as e:
             logger.warning(f"[{self.name}] Could not write state file {self.state_file}: {e}")
@@ -241,25 +210,14 @@ class ArrInstance(APIClient):
             added_dt = datetime.fromisoformat(added.replace('Z', '+00:00'))
         except (ValueError, AttributeError):
             return False
-        # Defensive: if the *arr API ever returns a naive timestamp, treat
-        # it as UTC so the comparison with our tz-aware bookmark doesn't
-        # raise TypeError.
+        # Coerce naive timestamps to UTC so the comparison with our tz-aware bookmark doesn't TypeError.
         if added_dt.tzinfo is None:
             added_dt = added_dt.replace(tzinfo=timezone.utc)
         if added_dt <= self.last_run_time:
             return False
-        # If a webhook-triggered (or earlier) langarr action already searched
-        # this item since the previous scheduled-run bookmark, don't re-fire.
-        # last_triggered_searches stores Unix epoch floats and is wiped on
-        # restart — across a process restart we may still fire a duplicate,
-        # but Radarr/Sonarr no-op when the file is already grabbed.
-        # This guard only catches CROSS-RUN (or webhook → scheduled) cases;
-        # within the same process_all_items pass, update_item's own search
-        # path and this new path are mutually exclusive by construction
-        # (update_item True → updated branch; False → on_new branch).
+        # Skip items already searched cross-run (e.g. via webhook) since the bookmark; both sides are UTC epoch seconds.
         item_id = item.get('id')
         prior_search = self.last_triggered_searches.get(item_id)
-        # Both sides of the comparison are UTC epoch seconds (float).
         if prior_search and prior_search > self.last_run_time.timestamp():
             return False
         return True
@@ -740,10 +698,7 @@ class ArrInstance(APIClient):
             logger.info(f"[{self.name}]   Total: {stats['total']}")
             logger.info(f"[{self.name}] {'='*60}")
 
-            # Advance the bookmark only after a successful pass. Putting
-            # this here (rather than at the tail of process_all_items)
-            # keeps that method side-effect-free and centralises the
-            # dry-run guard, which lives inside _save_last_run_time.
+            # Bookmark only after a successful pass; kept here so a failed pass leaves the previous value intact.
             self._save_last_run_time()
 
             return True
