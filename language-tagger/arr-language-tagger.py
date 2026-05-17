@@ -194,7 +194,7 @@ class ArrInstance(APIClient):
         try:
             self.state_file.parent.mkdir(parents=True, exist_ok=True)
             # write-then-rename: atomic on POSIX so a crash mid-write preserves the previous bookmark.
-            tmp = self.state_file.with_suffix(self.state_file.suffix + '.tmp')
+            tmp = self.state_file.with_name(self.state_file.name + '.tmp')
             tmp.write_text(json.dumps({'last_run': now.isoformat()}))
             tmp.replace(self.state_file)
             self.last_run_time = now
