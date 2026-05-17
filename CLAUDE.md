@@ -146,6 +146,7 @@ radarr:
       - en
       - de
     trigger_search_on_update: true
+    trigger_search_on_new: true  # Search items added since the previous run (default: true)
     search_cooldown_seconds: 60
     min_search_interval_seconds: 5
     only_monitored: false  # Only process monitored items (default: false)

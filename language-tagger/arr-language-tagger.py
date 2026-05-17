@@ -149,7 +149,11 @@ class ArrInstance(APIClient):
         # no profile/tag change was needed (e.g. Seerr added a movie with
         # the correct profile already — without this, the item would sit
         # missing until fetcharr or a manual search reaches it).
-        state_dir = Path(os.environ.get('CONFIG_PATH', '/config/config.yml')).parent
+        # CONFIG_PATH is expected to be a file path; if a user points it at
+        # a directory we'd otherwise land the state file in the filesystem
+        # root, so detect that case via the file-suffix heuristic.
+        config_path = Path(os.environ.get('CONFIG_PATH', '/config/config.yml'))
+        state_dir = config_path.parent if config_path.suffix else config_path
         self.state_file = state_dir / f'.langarr-last-run-{self.service_type}-{self.name}.json'
         self.last_run_time: Optional[datetime] = self._load_last_run_time()
 
@@ -183,6 +187,7 @@ class ArrInstance(APIClient):
         now = datetime.now(timezone.utc)
         if self.dry_run:
             # Update in-memory only — dry-run shouldn't touch disk
+            logger.info(f"[{self.name}] [DRY-RUN] Skipping state file write at {self.state_file}")
             self.last_run_time = now
             return
         try:
