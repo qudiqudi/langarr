@@ -174,16 +174,23 @@ class ArrInstance(APIClient):
             return None
 
     def _save_last_run_time(self) -> None:
-        """Persist current run time so the next run knows what's 'new'."""
+        """Persist current run time so the next run knows what's 'new'.
+
+        Also updates the in-memory value so subsequent runs in the same
+        long-lived process pick up the new bookmark (the scheduled-mode
+        process loops without re-running __init__).
+        """
+        now = datetime.now(timezone.utc)
         if self.dry_run:
+            # Update in-memory only — dry-run shouldn't touch disk
+            self.last_run_time = now
             return
         try:
             self.state_file.parent.mkdir(parents=True, exist_ok=True)
-            self.state_file.write_text(json.dumps({
-                'last_run': datetime.now(timezone.utc).isoformat(),
-            }))
+            self.state_file.write_text(json.dumps({'last_run': now.isoformat()}))
         except OSError as e:
             logger.warning(f"[{self.name}] Could not write state file {self.state_file}: {e}")
+        self.last_run_time = now
 
     def _is_newly_added(self, item: Dict) -> bool:
         """True if the item was added to *arr after the previous langarr run."""
@@ -196,6 +203,11 @@ class ArrInstance(APIClient):
             added_dt = datetime.fromisoformat(added.replace('Z', '+00:00'))
         except (ValueError, AttributeError):
             return False
+        # Defensive: if the *arr API ever returns a naive timestamp, treat
+        # it as UTC so the comparison with our tz-aware bookmark doesn't
+        # raise TypeError.
+        if added_dt.tzinfo is None:
+            added_dt = added_dt.replace(tzinfo=timezone.utc)
         return added_dt > self.last_run_time
 
     def trigger_search_for_item(self, item_id: int, endpoint: str, force: bool = False) -> bool:
@@ -624,7 +636,10 @@ class ArrInstance(APIClient):
                 # nothing else in the stack will (the user has Radarr's
                 # "Search on Add" disabled to avoid racing langarr's tagging).
                 if is_new and self.trigger_search_on_new:
-                    if self.trigger_search_for_item(item['id'], endpoint):
+                    # force=True bypasses the trigger_search_on_update gate
+                    # so that a user can have on_update=false while keeping
+                    # on_new=true (the two options are independent).
+                    if self.trigger_search_for_item(item['id'], endpoint, force=True):
                         searched_new_count += 1
 
         if unmonitored_count > 0:
