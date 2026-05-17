@@ -14,6 +14,7 @@ Features:
 - Configuration via config.yml
 """
 
+import json
 import os
 import sys
 import time
@@ -22,6 +23,7 @@ import requests
 import logging
 import schedule
 import fcntl
+from datetime import datetime, timezone
 from typing import List, Dict, Optional, Set
 from pathlib import Path
 from overseerr_integration import OverseerrInstance
@@ -131,6 +133,7 @@ class ArrInstance(APIClient):
 
         # Triggered search configuration
         self.trigger_search_on_update = config.get('trigger_search_on_update', True)
+        self.trigger_search_on_new = config.get('trigger_search_on_new', True)
         self.search_cooldown_seconds = config.get('search_cooldown_seconds', 60)
         self.min_search_interval_seconds = config.get('min_search_interval_seconds', 5)
 
@@ -140,6 +143,15 @@ class ArrInstance(APIClient):
         # Search tracking
         self.last_triggered_searches = {}  # {item_id: timestamp}
         self.last_any_search = 0
+
+        # Per-instance state: timestamp of the previous run, used to detect
+        # items added since then so we can fire a search for them even when
+        # no profile/tag change was needed (e.g. Seerr added a movie with
+        # the correct profile already — without this, the item would sit
+        # missing until fetcharr or a manual search reaches it).
+        state_dir = Path(os.environ.get('CONFIG_PATH', '/config/config.yml')).parent
+        self.state_file = state_dir / f'.langarr-last-run-{self.service_type}-{self.name}.json'
+        self.last_run_time: Optional[datetime] = self._load_last_run_time()
 
     def _get(self, endpoint: str, params: Optional[Dict] = None, **kwargs) -> dict:
         """Make GET request to Arr API (v3)."""
@@ -152,6 +164,39 @@ class ArrInstance(APIClient):
     def _put(self, endpoint: str, data: Optional[Dict] = None, **kwargs) -> dict:
         """Make PUT request to Arr API (v3)."""
         return super()._put(f"api/v3/{endpoint}", data, **kwargs)
+
+    def _load_last_run_time(self) -> Optional[datetime]:
+        """Return the previous run's UTC timestamp, or None on first run."""
+        try:
+            data = json.loads(self.state_file.read_text())
+            return datetime.fromisoformat(data['last_run'])
+        except (FileNotFoundError, KeyError, ValueError, OSError):
+            return None
+
+    def _save_last_run_time(self) -> None:
+        """Persist current run time so the next run knows what's 'new'."""
+        if self.dry_run:
+            return
+        try:
+            self.state_file.parent.mkdir(parents=True, exist_ok=True)
+            self.state_file.write_text(json.dumps({
+                'last_run': datetime.now(timezone.utc).isoformat(),
+            }))
+        except OSError as e:
+            logger.warning(f"[{self.name}] Could not write state file {self.state_file}: {e}")
+
+    def _is_newly_added(self, item: Dict) -> bool:
+        """True if the item was added to *arr after the previous langarr run."""
+        if self.last_run_time is None:
+            return False  # first run: don't search anything en masse
+        added = item.get('added')
+        if not added:
+            return False
+        try:
+            added_dt = datetime.fromisoformat(added.replace('Z', '+00:00'))
+        except (ValueError, AttributeError):
+            return False
+        return added_dt > self.last_run_time
 
     def trigger_search_for_item(self, item_id: int, endpoint: str, force: bool = False) -> bool:
         """
@@ -552,6 +597,9 @@ class ArrInstance(APIClient):
         updated_count = 0
         skipped_count = 0
         unmonitored_count = 0
+        searched_new_count = 0
+
+        endpoint = "movie" if self.service_type == "radarr" else "series"
 
         for idx, item in enumerate(items, 1):
             # Progress indicator for large libraries
@@ -564,19 +612,35 @@ class ArrInstance(APIClient):
                 continue
 
             prefer_dub = self.should_prefer_dub(item)
+            is_new = self._is_newly_added(item)
 
             if self.update_item(item, add_tag=prefer_dub):
                 updated_count += 1
+                # update_item already triggers a search when it changes the profile
             else:
                 skipped_count += 1
+                # Item didn't need updating — but if it was added since the
+                # last langarr run we still want to fire a search, because
+                # nothing else in the stack will (the user has Radarr's
+                # "Search on Add" disabled to avoid racing langarr's tagging).
+                if is_new and self.trigger_search_on_new:
+                    if self.trigger_search_for_item(item['id'], endpoint):
+                        searched_new_count += 1
 
         if unmonitored_count > 0:
             logger.info(f"[{self.name}] Skipped {unmonitored_count} unmonitored items")
+        if searched_new_count > 0:
+            logger.info(f"[{self.name}] Triggered search for {searched_new_count} newly-added item(s) "
+                        f"that did not need profile changes")
+
+        # Bookmark this run so the next pass knows what's "new" since now.
+        self._save_last_run_time()
 
         return {
             'updated': updated_count,
             'skipped': skipped_count,
-            'total': len(items)
+            'total': len(items),
+            'searched_new': searched_new_count,
         }
 
     def run(self) -> bool:
