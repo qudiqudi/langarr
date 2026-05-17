@@ -23,7 +23,7 @@ import requests
 import logging
 import schedule
 import fcntl
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import List, Dict, Optional, Set
 from pathlib import Path
 from overseerr_integration import OverseerrInstance
@@ -167,12 +167,8 @@ class ArrInstance(APIClient):
     def _resolve_state_dir_from_env() -> Path:
         """Test/standalone fallback; production uses ArrLanguageTagger-supplied state_dir."""
         config_path = Path(os.environ.get('CONFIG_PATH', '/config/config.yml'))
-        if config_path.is_file():
-            return config_path.parent
-        if config_path.is_dir():
-            return config_path
-        # First-deploy fallback: suffix as a proxy, misfires on extensionless files.
-        return config_path.parent if config_path.suffix else config_path
+        # Always treat CONFIG_PATH as a file path and use its parent directory.
+        return config_path.parent
 
     def _load_last_run_time(self) -> Optional[datetime]:
         """Return the previous run's UTC timestamp, or None on first run."""
@@ -213,7 +209,8 @@ class ArrInstance(APIClient):
         # Coerce naive timestamps to UTC so the comparison with our tz-aware bookmark doesn't TypeError.
         if added_dt.tzinfo is None:
             added_dt = added_dt.replace(tzinfo=timezone.utc)
-        if added_dt <= self.last_run_time:
+        # Apply a clock-skew grace so items added a few seconds either side of the bookmark aren't silently missed.
+        if added_dt <= self.last_run_time - timedelta(seconds=self.search_cooldown_seconds):
             return False
         # Skip items already searched cross-run (e.g. via webhook) since the bookmark; both sides are UTC epoch seconds.
         item_id = item.get('id')
@@ -693,7 +690,7 @@ class ArrInstance(APIClient):
             else:
                 logger.info(f"[{self.name}]   Updated: {stats['updated']}")
             logger.info(f"[{self.name}]   Already correct: {stats['skipped']}")
-            if stats.get('searched_new'):
+            if stats['searched_new']:
                 logger.info(f"[{self.name}]   Newly-added searched: {stats['searched_new']}")
             logger.info(f"[{self.name}]   Total: {stats['total']}")
             logger.info(f"[{self.name}] {'='*60}")
