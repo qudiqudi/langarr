@@ -70,6 +70,16 @@ radarr:
 
     # Triggered Search Options
     trigger_search_on_update: true      # Auto-search after profile update (default: true)
+    trigger_search_on_new: true         # Auto-search for items added since the previous langarr run,
+                                        # even when no profile change is needed (default: true).
+                                        # Useful when Radarr/Sonarr "Search on Add" is disabled to
+                                        # avoid racing langarr's tagging. If "Search on Add" is
+                                        # ENABLED in *arr, set this to false to avoid duplicate
+                                        # searches. NOTE for Sonarr: this fires a SeriesSearch per
+                                        # newly-added series — for long-running shows that's broad.
+                                        # Use search_cooldown_seconds and min_search_interval_seconds
+                                        # to throttle, or set this to false if your indexers are
+                                        # sensitive to bulk queries.
     search_cooldown_seconds: 60         # Don't search same item within 60s (default: 60)
     min_search_interval_seconds: 5      # Min time between ANY searches (default: 5)
 
@@ -122,6 +132,16 @@ sonarr:
 
     # Triggered Search Options
     trigger_search_on_update: true      # Auto-search after profile update (default: true)
+    trigger_search_on_new: true         # Auto-search for items added since the previous langarr run,
+                                        # even when no profile change is needed (default: true).
+                                        # Useful when Radarr/Sonarr "Search on Add" is disabled to
+                                        # avoid racing langarr's tagging. If "Search on Add" is
+                                        # ENABLED in *arr, set this to false to avoid duplicate
+                                        # searches. NOTE for Sonarr: this fires a SeriesSearch per
+                                        # newly-added series — for long-running shows that's broad.
+                                        # Use search_cooldown_seconds and min_search_interval_seconds
+                                        # to throttle, or set this to false if your indexers are
+                                        # sensitive to bulk queries.
     search_cooldown_seconds: 60         # Don't search same item within 60s (default: 60)
     min_search_interval_seconds: 5      # Min time between ANY searches (default: 5)
 

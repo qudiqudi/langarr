@@ -14,6 +14,7 @@ Features:
 - Configuration via config.yml
 """
 
+import json
 import os
 import sys
 import time
@@ -22,6 +23,7 @@ import requests
 import logging
 import schedule
 import fcntl
+from datetime import datetime, timedelta, timezone
 from typing import List, Dict, Optional, Set
 from pathlib import Path
 from overseerr_integration import OverseerrInstance
@@ -95,8 +97,9 @@ class ProcessLock:
 class ArrInstance(APIClient):
     """Base class for Sonarr/Radarr instance management."""
 
-    def __init__(self, name: str, service_type: str, config: dict):
+    def __init__(self, name: str, service_type: str, config: dict, state_dir: Optional[Path] = None):
         """Initialize Arr instance."""
+        # state_dir: explicit path beats re-reading CONFIG_PATH per-instance.
         # Validate required fields
         base_url = config.get('base_url')
         api_key = config.get('api_key')
@@ -131,6 +134,7 @@ class ArrInstance(APIClient):
 
         # Triggered search configuration
         self.trigger_search_on_update = config.get('trigger_search_on_update', True)
+        self.trigger_search_on_new = config.get('trigger_search_on_new', True)
         self.search_cooldown_seconds = config.get('search_cooldown_seconds', 60)
         self.min_search_interval_seconds = config.get('min_search_interval_seconds', 5)
 
@@ -140,6 +144,13 @@ class ArrInstance(APIClient):
         # Search tracking
         self.last_triggered_searches = {}  # {item_id: timestamp}
         self.last_any_search = 0
+
+        # Bookmark previous-run time so newly-added items get searched even when no profile change was needed.
+        if state_dir is None:
+            state_dir = self._resolve_state_dir_from_env()
+        safe_name = ''.join(c if c.isalnum() or c in '-_.' else '_' for c in self.name)
+        self.state_file = state_dir / f'.langarr-last-run-{self.service_type}-{safe_name}.json'
+        self.last_run_time: Optional[datetime] = self._load_last_run_time()
 
     def _get(self, endpoint: str, params: Optional[Dict] = None, **kwargs) -> dict:
         """Make GET request to Arr API (v3)."""
@@ -153,6 +164,76 @@ class ArrInstance(APIClient):
         """Make PUT request to Arr API (v3)."""
         return super()._put(f"api/v3/{endpoint}", data, **kwargs)
 
+    @property
+    def _item_endpoint(self) -> str:
+        """API endpoint segment: 'movie' for Radarr, 'series' for Sonarr."""
+        return "movie" if self.service_type == "radarr" else "series"
+
+    @staticmethod
+    def _resolve_state_dir_from_env() -> Path:
+        """Test/standalone fallback; production uses ArrLanguageTagger-supplied state_dir."""
+        config_path = Path(os.environ.get('CONFIG_PATH', '/config/config.yml'))
+        # Always treat CONFIG_PATH as a file path and use its parent directory.
+        return config_path.parent
+
+    def _load_last_run_time(self) -> Optional[datetime]:
+        """Return the previous run's UTC timestamp, or None on first run."""
+        try:
+            data = json.loads(self.state_file.read_text())
+            return datetime.fromisoformat(data['last_run'])
+        except (FileNotFoundError, KeyError, ValueError, OSError):
+            return None
+
+    def _save_last_run_time(self) -> None:
+        """Persist run time; on disk failure still advance in-memory to avoid an in-session re-search loop."""
+        now = datetime.now(timezone.utc)
+        if self.dry_run:
+            # Dry-run is observable across iterations: don't touch bookmark anywhere.
+            logger.info(f"[{self.name}] [DRY-RUN] Skipping state file write at {self.state_file}")
+            return
+        try:
+            self.state_file.parent.mkdir(parents=True, exist_ok=True)
+            # write-then-rename: atomic on POSIX so a crash mid-write preserves the previous bookmark.
+            tmp = self.state_file.with_name(self.state_file.name + '.tmp')
+            tmp.write_text(json.dumps({'last_run': now.isoformat()}))
+            tmp.replace(self.state_file)
+            self.last_run_time = now
+        except OSError as e:
+            # Loud warning every run so a persistent write failure is impossible to miss.
+            logger.error(
+                f"[{self.name}] STATE PERSISTENCE BROKEN — could not write {self.state_file}: {e}. "
+                f"Bookmark advanced in memory only; will reset on restart and may cause repeated searches."
+            )
+            # Advance in memory so the current process doesn't perpetually re-search the same window.
+            self.last_run_time = now
+
+    def _is_newly_added(self, item: Dict) -> bool:
+        """True if the item was added to *arr after the previous langarr run."""
+        if self.last_run_time is None:
+            return False
+        added = item.get('added')
+        if not added:
+            return False
+        try:
+            added_dt = datetime.fromisoformat(added.replace('Z', '+00:00'))
+        except (ValueError, AttributeError):
+            return False
+        # Coerce naive timestamps to UTC so the comparison with our tz-aware bookmark doesn't TypeError.
+        if added_dt.tzinfo is None:
+            added_dt = added_dt.replace(tzinfo=timezone.utc)
+        # 5s backward overlap: items added just before the bookmark on a host where
+        # *arr's clock is slightly behind are still caught. Any duplicate this causes
+        # is suppressed in-session by last_triggered_searches; across a restart Radarr
+        # no-ops if the file is already grabbed, so the worst case is one extra query.
+        if added_dt <= self.last_run_time - timedelta(seconds=5):
+            return False
+        # Skip items already searched cross-run (e.g. via webhook) since the bookmark; both sides are UTC epoch seconds.
+        item_id = item.get('id')
+        prior_search = self.last_triggered_searches.get(item_id)
+        if prior_search and prior_search > self.last_run_time.timestamp():
+            return False
+        return True
+
     def trigger_search_for_item(self, item_id: int, endpoint: str, force: bool = False) -> bool:
         """
         Trigger automatic search for specific item after profile update.
@@ -160,7 +241,10 @@ class ArrInstance(APIClient):
         Args:
             item_id: The movie or series ID
             endpoint: 'movie' or 'series'
-            force: If True, bypass the trigger_search_on_update flag (used for webhook-triggered searches)
+            force: If True, bypass ONLY the trigger_search_on_update flag. The per-item
+                cooldown (search_cooldown_seconds) and the global rate limit
+                (min_search_interval_seconds) still apply, so a large burst of force=True
+                calls cannot saturate the indexer.
 
         Returns:
             True if search was triggered, False if skipped
@@ -365,7 +449,7 @@ class ArrInstance(APIClient):
 
     def get_all_items(self) -> List[Dict]:
         """Fetch all items (movies/series) from instance."""
-        endpoint = "movie" if self.service_type == "radarr" else "series"
+        endpoint = self._item_endpoint
         logger.info(f"[{self.name}] Fetching all {endpoint}...")
         items = self._get(endpoint)
         logger.info(f"[{self.name}] Found {len(items)} {endpoint}")
@@ -396,7 +480,7 @@ class ArrInstance(APIClient):
             Item dict if found, None otherwise
         """
         try:
-            endpoint = "movie" if self.service_type == "radarr" else "series"
+            endpoint = self._item_endpoint
             items = self._get(endpoint)
 
             for item in items:
@@ -510,7 +594,7 @@ class ArrInstance(APIClient):
             else:
                 logger.info(f"[{self.name}] Updating '{title}' [{original_lang_name}]: {', '.join(changes)}")
                 try:
-                    endpoint = "movie" if self.service_type == "radarr" else "series"
+                    endpoint = self._item_endpoint
 
                     # CRITICAL FIX: Only send fields we're modifying
                     # Get the full item first to preserve required fields
@@ -552,6 +636,9 @@ class ArrInstance(APIClient):
         updated_count = 0
         skipped_count = 0
         unmonitored_count = 0
+        searched_new_count = 0
+
+        endpoint = self._item_endpoint
 
         for idx, item in enumerate(items, 1):
             # Progress indicator for large libraries
@@ -564,11 +651,20 @@ class ArrInstance(APIClient):
                 continue
 
             prefer_dub = self.should_prefer_dub(item)
+            is_new = self.trigger_search_on_new and self._is_newly_added(item)
 
-            if self.update_item(item, add_tag=prefer_dub):
+            updated = self.update_item(item, add_tag=prefer_dub)
+            if updated:
                 updated_count += 1
+                # update_item didn't search this one (on_update disabled); the on_new flag still wants it searched.
+                if is_new and not self.trigger_search_on_update:
+                    if self.trigger_search_for_item(item['id'], endpoint, force=True):
+                        searched_new_count += 1
             else:
                 skipped_count += 1
+                if is_new:
+                    if self.trigger_search_for_item(item['id'], endpoint, force=True):
+                        searched_new_count += 1
 
         if unmonitored_count > 0:
             logger.info(f"[{self.name}] Skipped {unmonitored_count} unmonitored items")
@@ -576,7 +672,8 @@ class ArrInstance(APIClient):
         return {
             'updated': updated_count,
             'skipped': skipped_count,
-            'total': len(items)
+            'total': len(items),
+            'searched_new': searched_new_count,
         }
 
     def run(self) -> bool:
@@ -607,8 +704,13 @@ class ArrInstance(APIClient):
             else:
                 logger.info(f"[{self.name}]   Updated: {stats['updated']}")
             logger.info(f"[{self.name}]   Already correct: {stats['skipped']}")
+            if stats['searched_new']:
+                logger.info(f"[{self.name}]   Newly-added searched: {stats['searched_new']}")
             logger.info(f"[{self.name}]   Total: {stats['total']}")
             logger.info(f"[{self.name}] {'='*60}")
+
+            # Bookmark only after a successful pass; kept here so a failed pass leaves the previous value intact.
+            self._save_last_run_time()
 
             return True
 
@@ -1168,6 +1270,10 @@ class ArrLanguageTagger:
 
     def init_instances(self) -> None:
         """Initialize all Radarr and Sonarr instances from config."""
+        # Single source of truth for the state directory — passed to every
+        # ArrInstance so they don't each re-read CONFIG_PATH independently.
+        state_dir = Path(self.config_path).parent
+
         # Initialize Radarr instances
         if 'radarr' in self.config:
             for name, config in self.config['radarr'].items():
@@ -1179,7 +1285,7 @@ class ArrLanguageTagger:
 
                     try:
                         logger.info(f"Initializing Radarr instance: {name}")
-                        instance = ArrInstance(name, 'radarr', config)
+                        instance = ArrInstance(name, 'radarr', config, state_dir=state_dir)
                         self.instances.append(instance)
                     except ValueError as e:
                         logger.error(f"Failed to initialize Radarr instance '{name}': {e}")
@@ -1198,7 +1304,7 @@ class ArrLanguageTagger:
 
                     try:
                         logger.info(f"Initializing Sonarr instance: {name}")
-                        instance = ArrInstance(name, 'sonarr', config)
+                        instance = ArrInstance(name, 'sonarr', config, state_dir=state_dir)
                         self.instances.append(instance)
                     except ValueError as e:
                         logger.error(f"Failed to initialize Sonarr instance '{name}': {e}")
