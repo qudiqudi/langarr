@@ -210,7 +210,7 @@ class ArrInstance(APIClient):
     def _is_newly_added(self, item: Dict) -> bool:
         """True if the item was added to *arr after the previous langarr run."""
         if self.last_run_time is None:
-            return False  # first run: don't search anything en masse
+            return False
         added = item.get('added')
         if not added:
             return False
@@ -221,8 +221,10 @@ class ArrInstance(APIClient):
         # Coerce naive timestamps to UTC so the comparison with our tz-aware bookmark doesn't TypeError.
         if added_dt.tzinfo is None:
             added_dt = added_dt.replace(tzinfo=timezone.utc)
-        # Small clock-skew grace (typical NTP drift is sub-second). Kept short on purpose
-        # so items already evaluated in the previous pass aren't re-flagged after a restart.
+        # 5s backward overlap: items added just before the bookmark on a host where
+        # *arr's clock is slightly behind are still caught. Any duplicate this causes
+        # is suppressed in-session by last_triggered_searches; across a restart Radarr
+        # no-ops if the file is already grabbed, so the worst case is one extra query.
         if added_dt <= self.last_run_time - timedelta(seconds=5):
             return False
         # Skip items already searched cross-run (e.g. via webhook) since the bookmark; both sides are UTC epoch seconds.
@@ -649,29 +651,24 @@ class ArrInstance(APIClient):
                 continue
 
             prefer_dub = self.should_prefer_dub(item)
-            is_new = self._is_newly_added(item)
+            is_new = self.trigger_search_on_new and self._is_newly_added(item)
 
             updated = self.update_item(item, add_tag=prefer_dub)
             if updated:
                 updated_count += 1
-                # If on_update is disabled, update_item didn't fire a search itself.
-                # A newly-added item still deserves one (on_new and on_update are independent).
-                if is_new and self.trigger_search_on_new and not self.trigger_search_on_update:
+                # update_item didn't search this one (on_update disabled); the on_new flag still wants it searched.
+                if is_new and not self.trigger_search_on_update:
                     if self.trigger_search_for_item(item['id'], endpoint, force=True):
                         searched_new_count += 1
             else:
                 skipped_count += 1
-                # Item didn't need updating — fire a search if newly added,
-                # because with "Search on Add" disabled in *arr nothing else will.
-                # force=True bypasses on_update so the two flags stay independent.
-                if is_new and self.trigger_search_on_new:
+                if is_new:
                     if self.trigger_search_for_item(item['id'], endpoint, force=True):
                         searched_new_count += 1
 
         if unmonitored_count > 0:
             logger.info(f"[{self.name}] Skipped {unmonitored_count} unmonitored items")
 
-        # Bookmark saved in run() after a successful pass, not here.
         return {
             'updated': updated_count,
             'skipped': skipped_count,
