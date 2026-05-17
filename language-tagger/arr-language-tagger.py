@@ -97,8 +97,14 @@ class ProcessLock:
 class ArrInstance(APIClient):
     """Base class for Sonarr/Radarr instance management."""
 
-    def __init__(self, name: str, service_type: str, config: dict):
-        """Initialize Arr instance."""
+    def __init__(self, name: str, service_type: str, config: dict, state_dir: Optional[Path] = None):
+        """Initialize Arr instance.
+
+        Args:
+            state_dir: Directory for per-instance state files. If omitted,
+                falls back to deriving from the CONFIG_PATH env var so
+                ArrInstance can still be constructed standalone (tests).
+        """
         # Validate required fields
         base_url = config.get('base_url')
         api_key = config.get('api_key')
@@ -149,19 +155,11 @@ class ArrInstance(APIClient):
         # no profile/tag change was needed (e.g. Seerr added a movie with
         # the correct profile already — without this, the item would sit
         # missing until fetcharr or a manual search reaches it).
-        # CONFIG_PATH is expected to be a file path; if a user points it at
-        # a directory we'd otherwise land the state file in the filesystem
-        # root. Prefer a real filesystem check; fall back to the suffix
-        # heuristic for the first-deploy case where the file may not exist
-        # yet (the heuristic misfires only on extensionless config files,
-        # which we treat as an unsupported edge case).
-        config_path = Path(os.environ.get('CONFIG_PATH', '/config/config.yml'))
-        if config_path.is_file():
-            state_dir = config_path.parent
-        elif config_path.is_dir():
-            state_dir = config_path
-        else:
-            state_dir = config_path.parent if config_path.suffix else config_path
+        # state_dir is normally passed in by ArrLanguageTagger (single
+        # source of truth for path resolution). The CONFIG_PATH fallback
+        # below exists only for direct/test instantiation.
+        if state_dir is None:
+            state_dir = self._resolve_state_dir_from_env()
         self.state_file = state_dir / f'.langarr-last-run-{self.service_type}-{self.name}.json'
         self.last_run_time: Optional[datetime] = self._load_last_run_time()
 
@@ -176,6 +174,20 @@ class ArrInstance(APIClient):
     def _put(self, endpoint: str, data: Optional[Dict] = None, **kwargs) -> dict:
         """Make PUT request to Arr API (v3)."""
         return super()._put(f"api/v3/{endpoint}", data, **kwargs)
+
+    @staticmethod
+    def _resolve_state_dir_from_env() -> Path:
+        """Fallback resolution of the state directory from CONFIG_PATH.
+
+        Prefer filesystem-type checks; fall back to a suffix heuristic for
+        the first-deploy case where the file doesn't exist yet.
+        """
+        config_path = Path(os.environ.get('CONFIG_PATH', '/config/config.yml'))
+        if config_path.is_file():
+            return config_path.parent
+        if config_path.is_dir():
+            return config_path
+        return config_path.parent if config_path.suffix else config_path
 
     def _load_last_run_time(self) -> Optional[datetime]:
         """Return the previous run's UTC timestamp, or None on first run."""
@@ -202,9 +214,13 @@ class ArrInstance(APIClient):
         try:
             self.state_file.parent.mkdir(parents=True, exist_ok=True)
             self.state_file.write_text(json.dumps({'last_run': now.isoformat()}))
+            # Only advance the in-memory bookmark when the on-disk write
+            # succeeded. If the volume is read-only or otherwise unwritable
+            # the next run should re-evaluate the same items rather than
+            # silently skipping them based on a memory-only bookmark.
+            self.last_run_time = now
         except OSError as e:
             logger.warning(f"[{self.name}] Could not write state file {self.state_file}: {e}")
-        self.last_run_time = now
 
     def _is_newly_added(self, item: Dict) -> bool:
         """True if the item was added to *arr after the previous langarr run."""
@@ -653,7 +669,7 @@ class ArrInstance(APIClient):
 
             if self.update_item(item, add_tag=prefer_dub):
                 updated_count += 1
-                # update_item already triggers a search when it changes the profile
+                # update_item triggers a search if trigger_search_on_update is set
             else:
                 skipped_count += 1
                 # Item didn't need updating — but if it was added since the
@@ -1274,6 +1290,10 @@ class ArrLanguageTagger:
 
     def init_instances(self) -> None:
         """Initialize all Radarr and Sonarr instances from config."""
+        # Single source of truth for the state directory — passed to every
+        # ArrInstance so they don't each re-read CONFIG_PATH independently.
+        state_dir = Path(self.config_path).parent
+
         # Initialize Radarr instances
         if 'radarr' in self.config:
             for name, config in self.config['radarr'].items():
@@ -1285,7 +1305,7 @@ class ArrLanguageTagger:
 
                     try:
                         logger.info(f"Initializing Radarr instance: {name}")
-                        instance = ArrInstance(name, 'radarr', config)
+                        instance = ArrInstance(name, 'radarr', config, state_dir=state_dir)
                         self.instances.append(instance)
                     except ValueError as e:
                         logger.error(f"Failed to initialize Radarr instance '{name}': {e}")
@@ -1304,7 +1324,7 @@ class ArrLanguageTagger:
 
                     try:
                         logger.info(f"Initializing Sonarr instance: {name}")
-                        instance = ArrInstance(name, 'sonarr', config)
+                        instance = ArrInstance(name, 'sonarr', config, state_dir=state_dir)
                         self.instances.append(instance)
                     except ValueError as e:
                         logger.error(f"Failed to initialize Sonarr instance '{name}': {e}")
