@@ -98,13 +98,8 @@ class ArrInstance(APIClient):
     """Base class for Sonarr/Radarr instance management."""
 
     def __init__(self, name: str, service_type: str, config: dict, state_dir: Optional[Path] = None):
-        """Initialize Arr instance.
-
-        Args:
-            state_dir: Directory for per-instance state files. If omitted,
-                falls back to deriving from the CONFIG_PATH env var so
-                ArrInstance can still be constructed standalone (tests).
-        """
+        """Initialize Arr instance."""
+        # state_dir: explicit path beats re-reading CONFIG_PATH per-instance.
         # Validate required fields
         base_url = config.get('base_url')
         api_key = config.get('api_key')
@@ -191,6 +186,10 @@ class ArrInstance(APIClient):
             return config_path.parent
         if config_path.is_dir():
             return config_path
+        # Path doesn't exist yet (first deploy). Suffix presence is an
+        # imperfect proxy for "this is meant to be a file" — misfires on
+        # extensionless files like `/config/data`, which we treat as an
+        # unsupported edge case in this fallback only.
         return config_path.parent if config_path.suffix else config_path
 
     def _load_last_run_time(self) -> Optional[datetime]:
@@ -217,7 +216,12 @@ class ArrInstance(APIClient):
             return
         try:
             self.state_file.parent.mkdir(parents=True, exist_ok=True)
-            self.state_file.write_text(json.dumps({'last_run': now.isoformat()}))
+            # write-then-rename: atomic on POSIX, so a crash mid-write
+            # leaves the previous bookmark intact rather than truncating
+            # to invalid JSON.
+            tmp = self.state_file.with_suffix(self.state_file.suffix + '.tmp')
+            tmp.write_text(json.dumps({'last_run': now.isoformat()}))
+            tmp.replace(self.state_file)
             # Only advance the in-memory bookmark when the on-disk write
             # succeeded. If the volume is read-only or otherwise unwritable
             # the next run should re-evaluate the same items rather than
@@ -695,8 +699,7 @@ class ArrInstance(APIClient):
         if unmonitored_count > 0:
             logger.info(f"[{self.name}] Skipped {unmonitored_count} unmonitored items")
 
-        # Bookmarking and the searched_new summary live in run(), keeping
-        # this method side-effect-free and a fair stats source.
+        # Bookmark saved in run() after a successful pass, not here.
         return {
             'updated': updated_count,
             'skipped': skipped_count,
