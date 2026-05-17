@@ -148,7 +148,8 @@ class ArrInstance(APIClient):
         # Bookmark previous-run time so newly-added items get searched even when no profile change was needed.
         if state_dir is None:
             state_dir = self._resolve_state_dir_from_env()
-        self.state_file = state_dir / f'.langarr-last-run-{self.service_type}-{self.name}.json'
+        safe_name = ''.join(c if c.isalnum() or c in '-_.' else '_' for c in self.name)
+        self.state_file = state_dir / f'.langarr-last-run-{self.service_type}-{safe_name}.json'
         self.last_run_time: Optional[datetime] = self._load_last_run_time()
 
     def _get(self, endpoint: str, params: Optional[Dict] = None, **kwargs) -> dict:
@@ -162,6 +163,11 @@ class ArrInstance(APIClient):
     def _put(self, endpoint: str, data: Optional[Dict] = None, **kwargs) -> dict:
         """Make PUT request to Arr API (v3)."""
         return super()._put(f"api/v3/{endpoint}", data, **kwargs)
+
+    @property
+    def _item_endpoint(self) -> str:
+        """API endpoint segment: 'movie' for Radarr, 'series' for Sonarr."""
+        return "movie" if self.service_type == "radarr" else "series"
 
     @staticmethod
     def _resolve_state_dir_from_env() -> Path:
@@ -179,7 +185,7 @@ class ArrInstance(APIClient):
             return None
 
     def _save_last_run_time(self) -> None:
-        """Persist run time; in-memory bookmark advances only on successful write."""
+        """Persist run time; on disk failure still advance in-memory to avoid an in-session re-search loop."""
         now = datetime.now(timezone.utc)
         if self.dry_run:
             # Dry-run is observable across iterations: don't touch bookmark anywhere.
@@ -193,7 +199,13 @@ class ArrInstance(APIClient):
             tmp.replace(self.state_file)
             self.last_run_time = now
         except OSError as e:
-            logger.warning(f"[{self.name}] Could not write state file {self.state_file}: {e}")
+            # Loud warning every run so a persistent write failure is impossible to miss.
+            logger.error(
+                f"[{self.name}] STATE PERSISTENCE BROKEN — could not write {self.state_file}: {e}. "
+                f"Bookmark advanced in memory only; will reset on restart and may cause repeated searches."
+            )
+            # Advance in memory so the current process doesn't perpetually re-search the same window.
+            self.last_run_time = now
 
     def _is_newly_added(self, item: Dict) -> bool:
         """True if the item was added to *arr after the previous langarr run."""
@@ -227,7 +239,10 @@ class ArrInstance(APIClient):
         Args:
             item_id: The movie or series ID
             endpoint: 'movie' or 'series'
-            force: If True, bypass the trigger_search_on_update flag (used for webhook-triggered searches)
+            force: If True, bypass ONLY the trigger_search_on_update flag. The per-item
+                cooldown (search_cooldown_seconds) and the global rate limit
+                (min_search_interval_seconds) still apply, so a large burst of force=True
+                calls cannot saturate the indexer.
 
         Returns:
             True if search was triggered, False if skipped
@@ -432,7 +447,7 @@ class ArrInstance(APIClient):
 
     def get_all_items(self) -> List[Dict]:
         """Fetch all items (movies/series) from instance."""
-        endpoint = "movie" if self.service_type == "radarr" else "series"
+        endpoint = self._item_endpoint
         logger.info(f"[{self.name}] Fetching all {endpoint}...")
         items = self._get(endpoint)
         logger.info(f"[{self.name}] Found {len(items)} {endpoint}")
@@ -463,7 +478,7 @@ class ArrInstance(APIClient):
             Item dict if found, None otherwise
         """
         try:
-            endpoint = "movie" if self.service_type == "radarr" else "series"
+            endpoint = self._item_endpoint
             items = self._get(endpoint)
 
             for item in items:
@@ -577,7 +592,7 @@ class ArrInstance(APIClient):
             else:
                 logger.info(f"[{self.name}] Updating '{title}' [{original_lang_name}]: {', '.join(changes)}")
                 try:
-                    endpoint = "movie" if self.service_type == "radarr" else "series"
+                    endpoint = self._item_endpoint
 
                     # CRITICAL FIX: Only send fields we're modifying
                     # Get the full item first to preserve required fields
@@ -621,7 +636,7 @@ class ArrInstance(APIClient):
         unmonitored_count = 0
         searched_new_count = 0
 
-        endpoint = "movie" if self.service_type == "radarr" else "series"
+        endpoint = self._item_endpoint
 
         for idx, item in enumerate(items, 1):
             # Progress indicator for large libraries
