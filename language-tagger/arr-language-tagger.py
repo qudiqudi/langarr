@@ -179,6 +179,10 @@ class ArrInstance(APIClient):
     def _resolve_state_dir_from_env() -> Path:
         """Fallback resolution of the state directory from CONFIG_PATH.
 
+        This path is only used when an ArrInstance is constructed directly
+        (tests / one-offs). In production, ArrLanguageTagger.init_instances
+        passes state_dir explicitly so this code does not run.
+
         Prefer filesystem-type checks; fall back to a suffix heuristic for
         the first-deploy case where the file doesn't exist yet.
         """
@@ -245,8 +249,13 @@ class ArrInstance(APIClient):
         # last_triggered_searches stores Unix epoch floats and is wiped on
         # restart — across a process restart we may still fire a duplicate,
         # but Radarr/Sonarr no-op when the file is already grabbed.
+        # This guard only catches CROSS-RUN (or webhook → scheduled) cases;
+        # within the same process_all_items pass, update_item's own search
+        # path and this new path are mutually exclusive by construction
+        # (update_item True → updated branch; False → on_new branch).
         item_id = item.get('id')
         prior_search = self.last_triggered_searches.get(item_id)
+        # Both sides of the comparison are UTC epoch seconds (float).
         if prior_search and prior_search > self.last_run_time.timestamp():
             return False
         return True
@@ -685,13 +694,9 @@ class ArrInstance(APIClient):
 
         if unmonitored_count > 0:
             logger.info(f"[{self.name}] Skipped {unmonitored_count} unmonitored items")
-        if searched_new_count > 0:
-            logger.info(f"[{self.name}] Triggered search for {searched_new_count} newly-added item(s) "
-                        f"that did not need profile changes")
 
-        # Bookmark this run so the next pass knows what's "new" since now.
-        self._save_last_run_time()
-
+        # Bookmarking and the searched_new summary live in run(), keeping
+        # this method side-effect-free and a fair stats source.
         return {
             'updated': updated_count,
             'skipped': skipped_count,
@@ -731,6 +736,12 @@ class ArrInstance(APIClient):
                 logger.info(f"[{self.name}]   Newly-added searched: {stats['searched_new']}")
             logger.info(f"[{self.name}]   Total: {stats['total']}")
             logger.info(f"[{self.name}] {'='*60}")
+
+            # Advance the bookmark only after a successful pass. Putting
+            # this here (rather than at the tail of process_all_items)
+            # keeps that method side-effect-free and centralises the
+            # dry-run guard, which lives inside _save_last_run_time.
+            self._save_last_run_time()
 
             return True
 
