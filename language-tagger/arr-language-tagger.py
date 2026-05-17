@@ -209,8 +209,9 @@ class ArrInstance(APIClient):
         # Coerce naive timestamps to UTC so the comparison with our tz-aware bookmark doesn't TypeError.
         if added_dt.tzinfo is None:
             added_dt = added_dt.replace(tzinfo=timezone.utc)
-        # Apply a clock-skew grace so items added a few seconds either side of the bookmark aren't silently missed.
-        if added_dt <= self.last_run_time - timedelta(seconds=self.search_cooldown_seconds):
+        # Small clock-skew grace (typical NTP drift is sub-second). Kept short on purpose
+        # so items already evaluated in the previous pass aren't re-flagged after a restart.
+        if added_dt <= self.last_run_time - timedelta(seconds=5):
             return False
         # Skip items already searched cross-run (e.g. via webhook) since the bookmark; both sides are UTC epoch seconds.
         item_id = item.get('id')
@@ -635,19 +636,20 @@ class ArrInstance(APIClient):
             prefer_dub = self.should_prefer_dub(item)
             is_new = self._is_newly_added(item)
 
-            if self.update_item(item, add_tag=prefer_dub):
+            updated = self.update_item(item, add_tag=prefer_dub)
+            if updated:
                 updated_count += 1
-                # update_item triggers a search if trigger_search_on_update is set
+                # If on_update is disabled, update_item didn't fire a search itself.
+                # A newly-added item still deserves one (on_new and on_update are independent).
+                if is_new and self.trigger_search_on_new and not self.trigger_search_on_update:
+                    if self.trigger_search_for_item(item['id'], endpoint, force=True):
+                        searched_new_count += 1
             else:
                 skipped_count += 1
-                # Item didn't need updating — but if it was added since the
-                # last langarr run we still want to fire a search, because
-                # nothing else in the stack will (the user has Radarr's
-                # "Search on Add" disabled to avoid racing langarr's tagging).
+                # Item didn't need updating — fire a search if newly added,
+                # because with "Search on Add" disabled in *arr nothing else will.
+                # force=True bypasses on_update so the two flags stay independent.
                 if is_new and self.trigger_search_on_new:
-                    # force=True bypasses the trigger_search_on_update gate
-                    # so that a user can have on_update=false while keeping
-                    # on_new=true (the two options are independent).
                     if self.trigger_search_for_item(item['id'], endpoint, force=True):
                         searched_new_count += 1
 
