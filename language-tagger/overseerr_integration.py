@@ -124,13 +124,16 @@ class OverseerrInstance(APIClient):
             logger.error(f"[{self.name}] Failed to fetch pending requests: {e}")
             return []
 
-    def get_request(self, request_id: int) -> Optional[Dict]:
-        """Get a single request (includes is4k and serverId)."""
-        try:
-            return self._get(f"request/{request_id}")
-        except Exception as e:
-            logger.error(f"[{self.name}] Failed to get request {request_id}: {e}")
-            return None
+    def get_request(self, request_id: int, attempts: int = 3) -> Optional[Dict]:
+        """Get a single request (includes is4k and serverId), with short retries."""
+        for attempt in range(1, attempts + 1):
+            try:
+                return self._get(f"request/{request_id}")
+            except Exception as e:
+                if attempt == attempts:
+                    logger.error(f"[{self.name}] Failed to get request {request_id}: {e}")
+                    return None
+                time.sleep(2 * attempt)
 
     def get_default_server_id(self, service_type: str, is4k: bool) -> Optional[int]:
         """Get the ID of the default Radarr/Sonarr server for 4K or non-4K requests.
