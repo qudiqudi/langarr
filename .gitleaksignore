@@ -6,7 +6,6 @@ language-tagger/config.example.yml:*
 
 # Documentation files that reference tokens/keys as examples
 README.md:*auth_token*
-CLAUDE.md:*auth_token*
 
 # GitHub workflow files that use secrets correctly
 .github/workflows/*:GITHUB_TOKEN
