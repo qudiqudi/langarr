@@ -19,7 +19,6 @@ import os
 import sys
 import time
 import yaml
-import requests
 import logging
 import schedule
 import fcntl

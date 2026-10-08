@@ -14,7 +14,6 @@ Features:
 
 import os
 import logging
-import requests
 import time
 from typing import List, Dict, Optional
 from api_client import APIClient
