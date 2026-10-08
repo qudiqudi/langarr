@@ -169,6 +169,27 @@ class ArrInstance(APIClient):
         """API endpoint segment: 'movie' for Radarr, 'series' for Sonarr."""
         return "movie" if self.service_type == "radarr" else "series"
 
+    def edit_item(self, item_id: int, add_tags=(), remove_tags=(), profile_id: Optional[int] = None) -> None:
+        """Change only the given tags and/or the profile of one item (movie/series editor).
+
+        A PUT of the full item would write back the tag list that was read at the
+        start of the run, and so remove tags that another tool (or the user) added
+        in the meantime. The editor endpoints add and remove single tags on the server.
+        """
+        ids_key = 'movieIds' if self.service_type == 'radarr' else 'seriesIds'
+        endpoint = f"{self._item_endpoint}/editor"
+        add_tags, remove_tags = list(add_tags), list(remove_tags)
+        if profile_id is not None or add_tags:
+            body = {ids_key: [item_id]}
+            if profile_id is not None:
+                body['qualityProfileId'] = profile_id
+            if add_tags:
+                body['tags'] = add_tags
+                body['applyTags'] = 'add'
+            self._put(endpoint, body)
+        if remove_tags:
+            self._put(endpoint, {ids_key: [item_id], 'tags': remove_tags, 'applyTags': 'remove'})
+
     @staticmethod
     def _resolve_state_dir_from_env() -> Path:
         """Test/standalone fallback; production uses ArrLanguageTagger-supplied state_dir."""
@@ -343,9 +364,23 @@ class ArrInstance(APIClient):
         This allows flexible configuration - users can specify 'en', 'eng', 'English', or even integer IDs,
         and we'll match them against whatever format the API returns.
         """
-        # Collect all unique language data from items
         api_languages = {}  # {id: name}
-        for item in items[:50]:  # Sample first 50 items
+
+        # Prefer the full language catalog of the instance: with only the languages
+        # of existing items, a configured language that no item has yet (e.g. the
+        # first German movie in a new 4K instance) would stay unmapped and get the
+        # dub profile.
+        try:
+            for lang in self._get("language") or []:
+                lang_id = lang.get('id')
+                lang_name = (lang.get('name') or '').strip()
+                if isinstance(lang_id, int) and lang_id >= 0 and lang_name:
+                    api_languages[lang_id] = lang_name
+        except Exception as e:
+            logger.debug(f"[{self.name}] Language catalog not available ({e}), using item languages only")
+
+        # Add the languages of all items (not only a sample)
+        for item in items:
             lang_obj = item.get('originalLanguage')
             if isinstance(lang_obj, dict):
                 lang_id = lang_obj.get('id')
@@ -404,20 +439,15 @@ class ArrInstance(APIClient):
             # First resolve the config value to a language name using our map
             target_lang_name = iso_639_1_map.get(config_str, config_str)
 
-            # Now find matching API IDs
-            for api_id, api_name in api_languages.items():
-                api_name_lower = api_name.lower().strip()
-
-                # Exact match
-                if api_name_lower == target_lang_name:
-                    matched_ids.add(api_id)
-                    logger.info(f"[{self.name}] Mapped '{config_lang}' -> API ID {api_id!r} ({api_name})")
-                    break
-                # Partial match (e.g., "english" matches "English (US)")
-                elif target_lang_name in api_name_lower or api_name_lower in target_lang_name:
-                    matched_ids.add(api_id)
-                    logger.info(f"[{self.name}] Mapped '{config_lang}' -> API ID {api_id!r} ({api_name})")
-                    break
+            # Now find matching API IDs: an exact name match wins over a partial one,
+            # so the full catalog can not map "german" to a regional variant first
+            exact = [i for i, n in api_languages.items() if n.lower().strip() == target_lang_name]
+            partial = [i for i, n in api_languages.items()
+                       if target_lang_name in n.lower().strip() or n.lower().strip() in target_lang_name]
+            match = exact[:1] or partial[:1]
+            if match:
+                matched_ids.add(match[0])
+                logger.info(f"[{self.name}] Mapped '{config_lang}' -> API ID {match[0]!r} ({api_languages[match[0]]})")
             else:
                 logger.warning(f"[{self.name}] Could not map configured language '{config_lang}' to any API language")
                 logger.warning(f"[{self.name}] Available languages: {dict(list(api_languages.items())[:10])}")
@@ -556,8 +586,8 @@ class ArrInstance(APIClient):
 
         needs_update = False
         changes = []
-        new_tags = list(current_tags)
-        new_profile_id = current_profile_id
+        add_tags, remove_tags = [], []
+        new_profile_id = None
 
         # Determine target state
         if add_tag:
@@ -565,7 +595,7 @@ class ArrInstance(APIClient):
             target_profile_name = self.dub_profile_name
 
             if self.tag_id not in current_tags:
-                new_tags = list(current_tags | {self.tag_id})
+                add_tags = [self.tag_id]
                 needs_update = True
                 changes.append(f"add tag '{self.tag_name}'")
         else:
@@ -573,7 +603,7 @@ class ArrInstance(APIClient):
             target_profile_name = self.original_profile_name
 
             if self.tag_id in current_tags:
-                new_tags = list(current_tags - {self.tag_id})
+                remove_tags = [self.tag_id]
                 needs_update = True
                 changes.append(f"remove tag '{self.tag_name}'")
 
@@ -596,13 +626,9 @@ class ArrInstance(APIClient):
                 try:
                     endpoint = self._item_endpoint
 
-                    # CRITICAL FIX: Only send fields we're modifying
-                    # Get the full item first to preserve required fields
-                    update_payload = item.copy()
-                    update_payload['tags'] = new_tags
-                    update_payload['qualityProfileId'] = new_profile_id
-
-                    self._put(f"{endpoint}/{item_id}", update_payload)
+                    # Only the changed tag and profile, via the editor endpoint
+                    self.edit_item(item_id, add_tags=add_tags, remove_tags=remove_tags,
+                                   profile_id=new_profile_id)
 
                     # Rate limiting
                     if self.update_delay > 0:
@@ -955,10 +981,8 @@ class AudioTagProcessor:
             return False
 
         try:
-            endpoint = "movie" if instance.service_type == "radarr" else "series"
-            update_payload = item.copy()
-            update_payload['tags'] = list(new_tags)
-            instance._put(f"{endpoint}/{item_id}", update_payload)
+            instance.edit_item(item_id, add_tags=tags_to_add - current_tags,
+                               remove_tags=tags_to_remove & current_tags)
             logger.info(f"[{instance.name}] Updated audio tags for '{title}'")
             return True
         except Exception as e:
