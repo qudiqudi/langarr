@@ -99,6 +99,10 @@ updates:
       day: "monday"
     cooldown:
       default-days: 7
+    ignore:
+      # A Node major is a manual change, together with webui/.nvmrc and @types/node
+      - dependency-name: "node"
+        update-types: ["version-update:semver-major"]
     labels:
       - "dependencies"
       - "area/docker"
