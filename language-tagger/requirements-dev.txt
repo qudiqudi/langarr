@@ -1,0 +1,2 @@
+# Tools for CI. Not installed in the Docker image.
+ruff==0.16.10
