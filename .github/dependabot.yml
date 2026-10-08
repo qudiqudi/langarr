@@ -87,7 +87,8 @@ updates:
     labels:
       - "dependencies"
     commit-message:
-      prefix: "chore(deps)"
+      # include: "scope" adds (deps) or (deps-dev) after the prefix
+      prefix: "chore"
       include: "scope"
 
   - package-ecosystem: "docker"
