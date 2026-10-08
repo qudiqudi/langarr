@@ -19,7 +19,7 @@ paths = [
 
 # Exclude documentation files that reference tokens as examples
 regexes = [
-    '''(README|CLAUDE)\.md.*auth_token''',
+    '''README\.md.*auth_token''',
     '''GITHUB_TOKEN''',
     '''secrets\.''',
 ]
