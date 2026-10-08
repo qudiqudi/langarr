@@ -34,7 +34,7 @@
     "reflect-metadata": "^0.2.2",
     "swr": "^2.3.8",
     "typeorm": "^0.3.28",
-    "uuid": "^13.0.0",
+    "uuid": "^14.0.2",
     "yup": "^1.7.1"
   },
   "devDependencies": {
