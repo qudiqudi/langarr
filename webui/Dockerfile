@@ -1,4 +1,4 @@
-FROM node:20-alpine
+FROM node:24-alpine
 
 WORKDIR /app
 
@@ -22,7 +22,7 @@ RUN npm run build
 RUN npx tsc -p tsconfig.server.json
 
 # Cleanup dev dependencies to reduce image size
-RUN npm prune --production
+RUN npm prune --omit=dev
 
 # Expose port
 EXPOSE 8383
