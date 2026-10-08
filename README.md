@@ -142,6 +142,8 @@ radarr:
       - en
 ```
 
+Environment variables for an extra instance: `RADARR_4K_URL` (or `RADARR_4K_BASE_URL`) and `RADARR_4K_API_KEY`.
+
 ### Monitored Items Only
 
 To only process monitored items (skip unmonitored):
@@ -178,6 +180,14 @@ overseerr:
 - Settings → Services → click server → check URL
 - Example: `/settings/services/radarr/0` → ID is `0`
 - Note: Seerr uses 0-based IDs (starts at 0, not 1)
+
+**4K servers:** map the 4K server to its own instance, for example:
+```yaml
+    radarr_servers:
+      0: main
+      1: 4k   # Seerr server marked as "4K Server"
+```
+Requests are routed by their server: a 4K request only updates (and searches in) the 4K instance, a regular request only the regular one. A request without a server yet goes to the Seerr default server for its 4K flag. Without a server mapping, webhook requests are applied to all instances of the service type.
 
 ### Webhook Support (Recommended for Auto-Approve)
 
