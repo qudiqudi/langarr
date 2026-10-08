@@ -1,2 +1,3 @@
 # Tools for CI. Not installed in the Docker image.
+pytest==9.1.1
 ruff==0.16.10

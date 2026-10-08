@@ -62,8 +62,6 @@ class WebhookServer:
 
         # Create Flask app
         self.app = Flask(__name__)
-        self.app.add_url_rule('/webhook', 'webhook', self.handle_webhook, methods=['POST'])
-        self.app.add_url_rule('/health', 'health', self.health_check, methods=['GET'])
 
         # Add rate limiting to prevent abuse
         self.limiter = Limiter(
@@ -73,8 +71,11 @@ class WebhookServer:
             storage_uri="memory://"
         )
 
-        # Apply stricter rate limit to webhook endpoint
-        self.limiter.limit("20 per minute")(self.handle_webhook)
+        # Apply stricter rate limit to webhook endpoint. Register the decorated
+        # function, otherwise the webhook endpoint has no limit at all.
+        limited_webhook = self.limiter.limit("20 per minute")(self.handle_webhook)
+        self.app.add_url_rule('/webhook', 'webhook', limited_webhook, methods=['POST'])
+        self.app.add_url_rule('/health', 'health', self.health_check, methods=['GET'])
 
         # Disable Flask's default logger output
         log = logging.getLogger('werkzeug')
