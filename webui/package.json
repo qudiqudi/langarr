@@ -10,6 +10,7 @@
     "start": "next start",
     "lint": "next lint",
     "type-check": "tsc --noEmit",
+    "test": "ts-node --transpile-only --compiler-options '{\"module\":\"commonjs\",\"moduleResolution\":\"node\"}' server/tests/audioTagProcessor.test.ts",
     "prepare": "husky || true"
   },
   "dependencies": {
@@ -43,7 +44,7 @@
     "@types/express": "^5.0.6",
     "@types/express-session": "^1.18.2",
     "@types/js-yaml": "^4.0.9",
-    "@types/node": "^20",
+    "@types/node": "^24",
     "@types/react": "^18",
     "@types/react-dom": "^18",
     "@types/uuid": "^10.0.0",
@@ -62,5 +63,11 @@
       "bash -c 'tsc --noEmit'",
       "next lint"
     ]
+  },
+  "allowScripts": {
+    "bcrypt": true,
+    "better-sqlite3": true,
+    "unrs-resolver": true,
+    "fsevents": false
   }
 }
