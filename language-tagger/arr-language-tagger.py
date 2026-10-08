@@ -1266,6 +1266,15 @@ class ArrLanguageTagger:
             logger.info(f"Using environment variable {env_var_name} for {service_type}.{instance_name}.{config_key}")
             return env_value
 
+        # The docs use the short form for extra instances (RADARR_4K_URL), the same
+        # as for 'main' (RADARR_URL). Accept it as an alias for *_BASE_URL.
+        if config_key == 'base_url':
+            alias_var_name = f"{service_type.upper()}_{instance_name.upper().replace('-', '_')}_URL"
+            env_value = os.environ.get(alias_var_name)
+            if env_value:
+                logger.info(f"Using environment variable {alias_var_name} for {service_type}.{instance_name}.{config_key}")
+                return env_value
+
         return default
 
     def init_instances(self) -> None:

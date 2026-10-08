@@ -235,11 +235,9 @@ class WebhookServer:
                 service_type = 'sonarr'
                 endpoint = 'series'
 
-            # Get all arr instances of the correct type
-            arr_instances = [arr for arr in self.arr_instances if arr.service_type == service_type]
+            arr_instances = self.select_arr_instances(overseerr, service_type, request_id)
 
             if not arr_instances:
-                logger.warning(f"No {service_type} instances configured")
                 return
 
             # Process each arr instance
@@ -280,6 +278,49 @@ class WebhookServer:
 
         except Exception as e:
             logger.error(f"Error processing media request: {e}", exc_info=True)
+
+    def select_arr_instances(self, overseerr, service_type: str, request_id) -> List:
+        """
+        Select the arr instances that a request is for.
+
+        A 4K request must only touch the 4K instance (and a regular request only the
+        regular one), otherwise every instance that already has the item gets a
+        profile update and a search. The request's serverId/is4k (read from the
+        Seerr API, the webhook payload does not carry them) decides the instance
+        via the overseerr.<name>.radarr_servers / sonarr_servers mapping.
+
+        Falls back to all instances of the service type if there is no server
+        mapping or the request cannot be read, which was the previous behavior.
+        """
+        all_instances = [arr for arr in self.arr_instances if arr.service_type == service_type]
+
+        if not all_instances:
+            logger.warning(f"No {service_type} instances configured")
+            return []
+
+        mapping = overseerr.radarr_mapping if service_type == 'radarr' else overseerr.sonarr_mapping
+        if not mapping:
+            logger.debug(f"No {service_type} server mapping configured, processing all {service_type} instances")
+            return all_instances
+
+        request_obj = overseerr.get_request(int(request_id)) if str(request_id or '').isdigit() else None
+        if not request_obj:
+            logger.warning(f"Could not read request {request_id}, processing all {service_type} instances")
+            return all_instances
+
+        is4k = bool(request_obj.get('is4k'))
+        server_id, arr = overseerr.resolve_arr_instance(service_type, request_obj.get('serverId'), is4k)
+
+        if server_id is None:
+            logger.warning(f"Request {request_id}: could not determine the target {service_type} server, processing all {service_type} instances")
+            return all_instances
+
+        if not arr:
+            logger.info(f"Request {request_id} ({'4K' if is4k else 'non-4K'}) goes to {service_type} server {server_id}, which has no langarr instance; skipping")
+            return []
+
+        logger.info(f"Request {request_id} ({'4K' if is4k else 'non-4K'}) → {service_type} server {server_id} → instance '{arr.name}'")
+        return [arr]
 
     def start(self):
         """Start webhook server in background thread."""

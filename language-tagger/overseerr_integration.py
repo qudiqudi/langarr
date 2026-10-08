@@ -60,6 +60,10 @@ class OverseerrInstance(APIClient):
         # Rate limiting
         self.update_delay = float(os.environ.get('UPDATE_DELAY', '0.5'))
 
+        # Server settings cache for default-server lookups: {service_type: (timestamp, servers)}
+        self.server_settings_cache = {}
+        self.server_settings_ttl = 600
+
     def _build_arr_mappings(self, config: dict, arr_instances: List):
         """Build mappings from Overseerr server IDs to ArrInstance objects."""
         radarr_config = config.get('radarr_servers', {})
@@ -120,6 +124,56 @@ class OverseerrInstance(APIClient):
         except Exception as e:
             logger.error(f"[{self.name}] Failed to fetch pending requests: {e}")
             return []
+
+    def get_request(self, request_id: int) -> Optional[Dict]:
+        """Get a single request (includes is4k and serverId)."""
+        try:
+            return self._get(f"request/{request_id}")
+        except Exception as e:
+            logger.error(f"[{self.name}] Failed to get request {request_id}: {e}")
+            return None
+
+    def get_default_server_id(self, service_type: str, is4k: bool) -> Optional[int]:
+        """Get the ID of the default Radarr/Sonarr server for 4K or non-4K requests.
+
+        Overseerr/Seerr sends a request without serverId to the server marked as
+        default for its is4k flag, so this is where the request will end up.
+        """
+        cached = self.server_settings_cache.get(service_type)
+        if cached and time.time() - cached[0] < self.server_settings_ttl:
+            servers = cached[1]
+        else:
+            try:
+                servers = self._get(f"settings/{service_type}")
+            except Exception as e:
+                logger.error(f"[{self.name}] Failed to get {service_type} server settings: {e}")
+                return None
+            self.server_settings_cache[service_type] = (time.time(), servers)
+
+        candidates = [s for s in servers if bool(s.get('is4k')) == bool(is4k)]
+        default = next((s for s in candidates if s.get('isDefault')), None)
+        if default is None and len(candidates) == 1:
+            default = candidates[0]
+        if default is None:
+            logger.warning(f"[{self.name}] No default {'4K ' if is4k else ''}{service_type} server found")
+            return None
+        return default.get('id')
+
+    def resolve_arr_instance(self, service_type: str, server_id: Optional[int], is4k: bool):
+        """Find the ArrInstance that will receive a request.
+
+        Uses the request's serverId if set, otherwise the default server for its
+        is4k flag. Returns (server_id, ArrInstance or None).
+        """
+        mapping = self.radarr_mapping if service_type == 'radarr' else self.sonarr_mapping
+
+        if server_id is None:
+            server_id = self.get_default_server_id(service_type, is4k)
+            if server_id is None:
+                return None, None
+            logger.debug(f"[{self.name}] No serverId, using default {'4K ' if is4k else ''}{service_type} server {server_id}")
+
+        return server_id, mapping.get(server_id)
 
     def get_media_language(self, media_type: str, tmdb_id: int) -> Optional[str]:
         """Get original language from Overseerr's cached TMDB data."""
@@ -248,10 +302,11 @@ class OverseerrInstance(APIClient):
         else:
             media_type = 'tv'
 
-        # Get request's server ID
+        # Get request's server ID (0 is a valid ID, only None means "not set yet")
         server_id = request.get('serverId')
+        is4k = bool(request.get('is4k'))
 
-        logger.info(f"[{self.name}] Processing request {request_id}: '{media_title}' (type={request_type}, media_type={media_type}, serverId={server_id})")
+        logger.info(f"[{self.name}] Processing request {request_id}: '{media_title}' (type={request_type}, media_type={media_type}, serverId={server_id}, is4k={is4k})")
 
         # Get the appropriate ArrInstance mapping
         if media_type == 'movie':
@@ -261,16 +316,16 @@ class OverseerrInstance(APIClient):
             service_type = 'sonarr'
             mapping = self.sonarr_mapping
 
-        # If no serverId, use the first (default) server in the mapping
-        if not server_id:
-            if not mapping:
-                logger.info(f"[{self.name}] Request {request_id} has no serverId and no {service_type} servers configured")
-                return False
-            # Use the first server as default
-            server_id = list(mapping.keys())[0]
-            logger.info(f"[{self.name}] Request {request_id} has no serverId, using default {service_type} server {server_id}")
+        if not mapping:
+            logger.info(f"[{self.name}] Request {request_id}: no {service_type} servers configured")
+            return False
 
-        arr_instance = mapping.get(server_id)
+        # Without a serverId, the request goes to the default server for its is4k flag
+        server_id, arr_instance = self.resolve_arr_instance(service_type, server_id, is4k)
+
+        if server_id is None:
+            logger.warning(f"[{self.name}] Request {request_id}: could not determine the target {service_type} server")
+            return False
 
         if not arr_instance:
             logger.info(f"[{self.name}] Request {request_id}: No mapping for {service_type} server {server_id} (available: {list(mapping.keys())})")
