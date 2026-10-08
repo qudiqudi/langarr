@@ -289,8 +289,11 @@ class WebhookServer:
         Seerr API, the webhook payload does not carry them) decides the instance
         via the overseerr.<name>.radarr_servers / sonarr_servers mapping.
 
-        Falls back to all instances of the service type if there is no server
-        mapping or the request cannot be read, which was the previous behavior.
+        Without a server mapping, all instances of the service type get the request
+        (the behavior before the mapping existed). With a mapping, a request that
+        cannot be read or resolved is skipped: sending it to all instances would
+        change the profile of the same item in the wrong instance (for example the
+        HD Radarr for a 4K request) and start a search there.
         """
         all_instances = [arr for arr in self.arr_instances if arr.service_type == service_type]
 
@@ -305,15 +308,15 @@ class WebhookServer:
 
         request_obj = overseerr.get_request(int(request_id)) if str(request_id or '').isdigit() else None
         if not request_obj:
-            logger.warning(f"Could not read request {request_id}, processing all {service_type} instances")
-            return all_instances
+            logger.warning(f"Could not read request {request_id}; skipping it (the scheduled run will process the item)")
+            return []
 
         is4k = bool(request_obj.get('is4k'))
         server_id, arr = overseerr.resolve_arr_instance(service_type, request_obj.get('serverId'), is4k)
 
         if server_id is None:
-            logger.warning(f"Request {request_id}: could not determine the target {service_type} server, processing all {service_type} instances")
-            return all_instances
+            logger.warning(f"Request {request_id}: could not determine the target {service_type} server; skipping it")
+            return []
 
         if not arr:
             logger.info(f"Request {request_id} ({'4K' if is4k else 'non-4K'}) goes to {service_type} server {server_id}, which has no langarr instance; skipping")
