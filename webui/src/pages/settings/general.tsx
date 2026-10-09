@@ -71,7 +71,7 @@ export default function GeneralSettings() {
 
             <div className="md:flex md:items-center md:justify-between">
                 <div className="min-w-0 flex-1">
-                    <h2 className="text-2xl font-bold leading-7 text-white sm:truncate sm:text-3xl sm:tracking-tight">
+                    <h2 className="text-2xl font-bold leading-7 text-white sm:truncate sm:text-3xl sm:leading-9 sm:tracking-tight">
                         General Settings
                     </h2>
                     <p className="mt-2 text-sm text-gray-400">
@@ -94,7 +94,7 @@ export default function GeneralSettings() {
                             <input
                                 type="number"
                                 min="1"
-                                className="mt-1 block w-full rounded-md border-gray-700 bg-gray-800 text-white shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2"
+                                className="mt-1 block w-full rounded-md border-gray-700 bg-gray-800 text-white shadow-xs focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2"
                                 value={syncIntervalInput}
                                 onChange={(e) => setSyncIntervalInput(e.target.value)}
                                 onBlur={() => {
@@ -115,7 +115,7 @@ export default function GeneralSettings() {
                             </div>
                             <button
                                 onClick={() => updateSettings({ runSyncOnStartup: !settings.runSyncOnStartup })}
-                                className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${settings.runSyncOnStartup ? 'bg-blue-600' : 'bg-gray-700'
+                                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden ${settings.runSyncOnStartup ? 'bg-blue-600' : 'bg-gray-700'
                                     }`}
                             >
                                 <span
@@ -139,7 +139,7 @@ export default function GeneralSettings() {
                         </div>
                         <button
                             onClick={() => updateSettings({ dryRunMode: !settings.dryRunMode })}
-                            className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${settings.dryRunMode ? 'bg-yellow-600' : 'bg-gray-700'
+                            className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden ${settings.dryRunMode ? 'bg-yellow-600' : 'bg-gray-700'
                                 }`}
                         >
                             <span

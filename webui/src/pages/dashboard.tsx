@@ -71,14 +71,14 @@ function InstanceHistory({ instance }: { instance: InstanceHealth }) {
                 alt={item.title}
                 width={33}
                 height={48}
-                className="rounded object-cover shadow-lg shrink-0"
+                className="rounded-sm object-cover shadow-lg shrink-0"
                 onError={(e) => {
                   (e.target as HTMLImageElement).style.display = 'none';
                 }}
                 unoptimized
               />
             ) : (
-              <div className="h-12 w-9 rounded bg-gray-700 flex items-center justify-center shrink-0">
+              <div className="h-12 w-9 rounded-sm bg-gray-700 flex items-center justify-center shrink-0">
                 {instance.type === 'radarr' ? (
                   <FilmIcon className="h-4 w-4 text-gray-500" />
                 ) : (
@@ -219,7 +219,7 @@ export default function DashboardPage() {
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <button
             onClick={() => handleAction('sync')}
-            className="group flex flex-col items-start gap-2 rounded-lg bg-gradient-to-br from-blue-600 to-blue-700 p-4 text-left hover:from-blue-500 hover:to-blue-600 transition-all shadow-lg hover:shadow-blue-500/20"
+            className="group flex flex-col items-start gap-2 rounded-lg bg-linear-to-br from-blue-600 to-blue-700 p-4 text-left hover:from-blue-500 hover:to-blue-600 transition-all shadow-lg hover:shadow-blue-500/20"
           >
             <div className="flex items-center gap-2">
               <ArrowPathIcon className="h-5 w-5" />
@@ -231,7 +231,7 @@ export default function DashboardPage() {
           </button>
           <button
             onClick={() => handleAction('audio-scan')}
-            className="group flex flex-col items-start gap-2 rounded-lg bg-gradient-to-br from-gray-700 to-gray-800 border border-gray-600 p-4 text-left hover:from-gray-600 hover:to-gray-700 hover:border-gray-500 transition-all"
+            className="group flex flex-col items-start gap-2 rounded-lg bg-linear-to-br from-gray-700 to-gray-800 border border-gray-600 p-4 text-left hover:from-gray-600 hover:to-gray-700 hover:border-gray-500 transition-all"
           >
             <div className="flex items-center gap-2">
               <SpeakerWaveIcon className="h-5 w-5 text-purple-400" />
@@ -243,7 +243,7 @@ export default function DashboardPage() {
           </button>
           <button
             onClick={() => setIsDryRunModalOpen(true)}
-            className="group flex flex-col items-start gap-2 rounded-lg bg-gradient-to-br from-yellow-600/20 to-yellow-700/10 border border-yellow-500/30 p-4 text-left hover:from-yellow-600/30 hover:to-yellow-700/20 hover:border-yellow-500/50 transition-all"
+            className="group flex flex-col items-start gap-2 rounded-lg bg-linear-to-br from-yellow-600/20 to-yellow-700/10 border border-yellow-500/30 p-4 text-left hover:from-yellow-600/30 hover:to-yellow-700/20 hover:border-yellow-500/50 transition-all"
           >
             <div className="flex items-center gap-2">
               <BeakerIcon className="h-5 w-5 text-yellow-500" />
@@ -266,15 +266,15 @@ export default function DashboardPage() {
       <div>
         <h2 className="mb-4 text-lg font-semibold text-white">Library Statistics</h2>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <div className="rounded-lg bg-gradient-to-br from-blue-500/10 to-blue-600/5 border border-blue-500/20 p-4">
+          <div className="rounded-lg bg-linear-to-br from-blue-500/10 to-blue-600/5 border border-blue-500/20 p-4">
             <div className="text-sm text-blue-400">Total Movies</div>
             <div className="mt-1 text-2xl font-bold text-white">{status?.statistics?.totalMovies || 0}</div>
           </div>
-          <div className="rounded-lg bg-gradient-to-br from-purple-500/10 to-purple-600/5 border border-purple-500/20 p-4">
+          <div className="rounded-lg bg-linear-to-br from-purple-500/10 to-purple-600/5 border border-purple-500/20 p-4">
             <div className="text-sm text-purple-400">Total Series</div>
             <div className="mt-1 text-2xl font-bold text-white">{status?.statistics?.totalSeries || 0}</div>
           </div>
-          <div className="rounded-lg bg-gradient-to-br from-green-500/10 to-green-600/5 border border-green-500/20 p-4">
+          <div className="rounded-lg bg-linear-to-br from-green-500/10 to-green-600/5 border border-green-500/20 p-4">
             <div className="text-sm text-green-400">Total Content</div>
             <div className="mt-1 text-2xl font-bold text-white">{status?.statistics?.totalContent || 0}</div>
           </div>
@@ -306,7 +306,7 @@ export default function DashboardPage() {
             {instanceHealth.instances.map((instance) => (
               <div
                 key={`${instance.type}-${instance.id}`}
-                className={`rounded-lg bg-gradient-to-br ${getTypeGradient(instance.type)} border p-4`}
+                className={`rounded-lg bg-linear-to-br ${getTypeGradient(instance.type)} border p-4`}
               >
                 {/* Instance Header */}
                 <div className="flex items-center justify-between mb-3">
@@ -373,7 +373,7 @@ export default function DashboardPage() {
                         <span>{new Date(log.timestamp).toLocaleString()}</span>
                       </div>
                     </div>
-                    <span className={`flex-shrink-0 inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${log.level === 'error' ? 'bg-red-500/10 text-red-400' :
+                    <span className={`shrink-0 inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${log.level === 'error' ? 'bg-red-500/10 text-red-400' :
                       log.level === 'warn' ? 'bg-yellow-500/10 text-yellow-400' :
                         log.level === 'info' ? 'bg-blue-500/10 text-blue-400' :
                           'bg-gray-500/10 text-gray-400'

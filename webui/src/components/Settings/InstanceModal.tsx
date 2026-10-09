@@ -175,7 +175,7 @@ export default function InstanceModal({ isOpen, onClose, onSave, instance, type 
                     leaveFrom="opacity-100"
                     leaveTo="opacity-0"
                 >
-                    <div className="fixed inset-0 bg-gray-950 bg-opacity-75 transition-opacity" />
+                    <div className="fixed inset-0 bg-gray-950/75 transition-opacity" />
                 </Transition.Child>
 
                 <div className="fixed inset-0 z-10 overflow-y-auto">
@@ -214,7 +214,7 @@ export default function InstanceModal({ isOpen, onClose, onSave, instance, type 
                                                 <input
                                                     type="text"
                                                     {...formik.getFieldProps('name')}
-                                                    className="mt-2 block w-full rounded-md border-0 bg-gray-800 py-1.5 text-white shadow-sm ring-1 ring-inset ring-gray-700 focus:ring-2 focus:ring-inset focus:ring-indigo-500 sm:text-sm sm:leading-6"
+                                                    className="mt-2 block w-full rounded-md border-0 bg-gray-800 py-1.5 text-white shadow-xs ring-1 ring-inset ring-gray-700 focus:ring-2 focus:ring-inset focus:ring-indigo-500 sm:text-sm sm:leading-6"
                                                 />
                                                 {formik.touched.name && formik.errors.name && (
                                                     <p className="text-red-500 text-xs mt-1">{formik.errors.name}</p>
@@ -235,7 +235,7 @@ export default function InstanceModal({ isOpen, onClose, onSave, instance, type 
                                                     type="text"
                                                     {...formik.getFieldProps('baseUrl')}
                                                     placeholder={`http://${type}:${defaultPort}`}
-                                                    className="mt-2 block w-full rounded-md border-0 bg-gray-800 py-1.5 text-white shadow-sm ring-1 ring-inset ring-gray-700 focus:ring-2 focus:ring-inset focus:ring-indigo-500 sm:text-sm sm:leading-6"
+                                                    className="mt-2 block w-full rounded-md border-0 bg-gray-800 py-1.5 text-white shadow-xs ring-1 ring-inset ring-gray-700 focus:ring-2 focus:ring-inset focus:ring-indigo-500 sm:text-sm sm:leading-6"
                                                 />
                                                 {formik.touched.baseUrl && formik.errors.baseUrl && (
                                                     <p className="text-red-500 text-xs mt-1">{formik.errors.baseUrl}</p>
@@ -249,9 +249,9 @@ export default function InstanceModal({ isOpen, onClose, onSave, instance, type 
                                                         type="password"
                                                         {...formik.getFieldProps('apiKey')}
                                                         placeholder={isEdit ? 'Leave empty to keep unchanged' : ''}
-                                                        className="mt-2 block w-full rounded-md border-0 bg-gray-800 py-1.5 text-white shadow-sm ring-1 ring-inset ring-gray-700 focus:ring-2 focus:ring-inset focus:ring-indigo-500 sm:text-sm sm:leading-6"
+                                                        className="mt-2 block w-full rounded-md border-0 bg-gray-800 py-1.5 text-white shadow-xs ring-1 ring-inset ring-gray-700 focus:ring-2 focus:ring-inset focus:ring-indigo-500 sm:text-sm sm:leading-6"
                                                     />
-                                                    <button type="button" onClick={testConnection} disabled={testing} className="mt-2 rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:opacity-50">
+                                                    <button type="button" onClick={testConnection} disabled={testing} className="mt-2 rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-semibold text-white shadow-xs hover:bg-indigo-500 disabled:opacity-50">
                                                         {testing ? '...' : 'Test'}
                                                     </button>
                                                 </div>
@@ -269,7 +269,7 @@ export default function InstanceModal({ isOpen, onClose, onSave, instance, type 
                                                     <select
                                                         {...formik.getFieldProps('originalProfile')}
                                                         disabled={loadingMetadata}
-                                                        className="mt-2 block w-full rounded-md border-0 bg-cyan-950/30 py-1.5 text-white shadow-sm ring-1 ring-inset ring-cyan-500/50 focus:ring-2 focus:ring-inset focus:ring-cyan-500 sm:text-sm sm:leading-6"
+                                                        className="mt-2 block w-full rounded-md border-0 bg-cyan-950/30 py-1.5 text-white shadow-xs ring-1 ring-inset ring-cyan-500/50 focus:ring-2 focus:ring-inset focus:ring-cyan-500 sm:text-sm sm:leading-6"
                                                     >
                                                         <option value="">Select Profile</option>
                                                         {profiles.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
@@ -280,7 +280,7 @@ export default function InstanceModal({ isOpen, onClose, onSave, instance, type 
                                                     <select
                                                         {...formik.getFieldProps('dubProfile')}
                                                         disabled={loadingMetadata}
-                                                        className="mt-2 block w-full rounded-md border-0 bg-rose-950/30 py-1.5 text-white shadow-sm ring-1 ring-inset ring-rose-500/50 focus:ring-2 focus:ring-inset focus:ring-rose-500 sm:text-sm sm:leading-6"
+                                                        className="mt-2 block w-full rounded-md border-0 bg-rose-950/30 py-1.5 text-white shadow-xs ring-1 ring-inset ring-rose-500/50 focus:ring-2 focus:ring-inset focus:ring-rose-500 sm:text-sm sm:leading-6"
                                                     >
                                                         <option value="">Select Profile</option>
                                                         {profiles.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
@@ -291,7 +291,7 @@ export default function InstanceModal({ isOpen, onClose, onSave, instance, type 
                                                     <input
                                                         type="text"
                                                         {...formik.getFieldProps('tagName')}
-                                                        className="mt-2 block w-full rounded-md border-0 bg-gray-800 py-1.5 text-white shadow-sm ring-1 ring-inset ring-gray-700 focus:ring-2 focus:ring-inset focus:ring-indigo-500 sm:text-sm sm:leading-6"
+                                                        className="mt-2 block w-full rounded-md border-0 bg-gray-800 py-1.5 text-white shadow-xs ring-1 ring-inset ring-gray-700 focus:ring-2 focus:ring-inset focus:ring-indigo-500 sm:text-sm sm:leading-6"
                                                     />
                                                     <p className="text-xs text-gray-500 mt-1">Tag added to processed items</p>
                                                 </div>
@@ -319,7 +319,7 @@ export default function InstanceModal({ isOpen, onClose, onSave, instance, type 
                                                     <button
                                                         type="button"
                                                         onClick={() => formik.setFieldValue('audioTaggingEnabled', !formik.values.audioTaggingEnabled)}
-                                                        className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${formik.values.audioTaggingEnabled ? 'bg-blue-600' : 'bg-gray-700'
+                                                        className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden ${formik.values.audioTaggingEnabled ? 'bg-blue-600' : 'bg-gray-700'
                                                             }`}
                                                     >
                                                         <span
@@ -341,7 +341,7 @@ export default function InstanceModal({ isOpen, onClose, onSave, instance, type 
                                                             id="onlyMonitored"
                                                             {...formik.getFieldProps('onlyMonitored')}
                                                             checked={formik.values.onlyMonitored}
-                                                            className="h-4 w-4 rounded border-gray-600 bg-gray-800 text-indigo-600 focus:ring-indigo-500"
+                                                            className="h-4 w-4 rounded-sm border-gray-600 bg-gray-800 text-indigo-600 focus:ring-indigo-500"
                                                         />
                                                         <label htmlFor="onlyMonitored" className="ml-3 text-sm text-gray-300">
                                                             Only Monitored Items
@@ -356,13 +356,13 @@ export default function InstanceModal({ isOpen, onClose, onSave, instance, type 
                                             <button
                                                 type="submit"
                                                 disabled={formik.isSubmitting}
-                                                className="inline-flex w-full justify-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 sm:col-start-2 disabled:opacity-50"
+                                                className="inline-flex w-full justify-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-xs hover:bg-indigo-500 focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 sm:col-start-2 disabled:opacity-50"
                                             >
                                                 {isEdit ? 'Save Changes' : 'Add Instance'}
                                             </button>
                                             <button
                                                 type="button"
-                                                className="mt-3 inline-flex w-full justify-center rounded-md bg-gray-800 px-3 py-2 text-sm font-semibold text-gray-300 shadow-sm ring-1 ring-inset ring-gray-600 hover:bg-gray-700 sm:col-start-1 sm:mt-0"
+                                                className="mt-3 inline-flex w-full justify-center rounded-md bg-gray-800 px-3 py-2 text-sm font-semibold text-gray-300 shadow-xs ring-1 ring-inset ring-gray-600 hover:bg-gray-700 sm:col-start-1 sm:mt-0"
                                                 onClick={onClose}
                                             >
                                                 Cancel

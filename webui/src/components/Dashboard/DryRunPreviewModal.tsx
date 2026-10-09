@@ -84,7 +84,7 @@ export default function DryRunPreviewModal({ isOpen, onClose }: DryRunPreviewMod
                     leaveFrom="opacity-100"
                     leaveTo="opacity-0"
                 >
-                    <div className="fixed inset-0 bg-gray-950 bg-opacity-75 transition-opacity" />
+                    <div className="fixed inset-0 bg-gray-950/75 transition-opacity" />
                 </Transition.Child>
 
                 <div className="fixed inset-0 z-10 overflow-y-auto">
@@ -190,7 +190,7 @@ export default function DryRunPreviewModal({ isOpen, onClose }: DryRunPreviewMod
                                 <div className="mt-5 sm:mt-4 flex justify-end">
                                     <button
                                         type="button"
-                                        className="inline-flex justify-center rounded-md bg-gray-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-gray-600 transition-colors"
+                                        className="inline-flex justify-center rounded-md bg-gray-700 px-4 py-2 text-sm font-semibold text-white shadow-xs hover:bg-gray-600 transition-colors"
                                         onClick={onClose}
                                         ref={closeButtonRef}
                                     >

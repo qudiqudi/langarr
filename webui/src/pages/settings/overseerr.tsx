@@ -169,7 +169,7 @@ export default function OverseerrSettings() {
             <div className="space-y-6 px-4 py-6 sm:px-6 lg:px-8">
                 <div className="md:flex md:items-center md:justify-between">
                     <div className="min-w-0 flex-1">
-                        <h2 className="text-2xl font-bold leading-7 text-white sm:truncate sm:text-3xl sm:tracking-tight">
+                        <h2 className="text-2xl font-bold leading-7 text-white sm:truncate sm:text-3xl sm:leading-9 sm:tracking-tight">
                             Overseerr Integration
                         </h2>
                         <p className="mt-2 text-sm text-gray-400">
@@ -180,7 +180,7 @@ export default function OverseerrSettings() {
 
                 {/* Instance Card */}
                 {!instance ? (
-                    <div className="rounded-lg bg-gray-900 shadow-sm ring-1 ring-gray-800 p-12 text-center">
+                    <div className="rounded-lg bg-gray-900 shadow-xs ring-1 ring-gray-800 p-12 text-center">
                         <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-indigo-900/50">
                             <PlusIcon className="h-6 w-6 text-indigo-400" aria-hidden="true" />
                         </div>
@@ -190,7 +190,7 @@ export default function OverseerrSettings() {
                             <button
                                 type="button"
                                 onClick={handleAdd}
-                                className="inline-flex items-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+                                className="inline-flex items-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-xs hover:bg-indigo-500 focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
                             >
                                 <PlusIcon className="-ml-0.5 mr-1.5 h-5 w-5" aria-hidden="true" />
                                 Connect Overseerr
@@ -198,7 +198,7 @@ export default function OverseerrSettings() {
                         </div>
                     </div>
                 ) : (
-                    <div className="rounded-lg bg-gray-900 shadow-sm ring-1 ring-gray-800 overflow-hidden">
+                    <div className="rounded-lg bg-gray-900 shadow-xs ring-1 ring-gray-800 overflow-hidden">
                         <div className="px-6 py-5 border-b border-gray-800">
                             <div className="flex items-center justify-between">
                                 <h3 className="text-lg font-medium text-white flex items-center gap-2">
@@ -219,7 +219,7 @@ export default function OverseerrSettings() {
                             <dl className="grid grid-cols-1 gap-x-4 gap-y-6 sm:grid-cols-2">
                                 <div>
                                     <dt className="text-sm font-medium text-gray-400">URL</dt>
-                                    <dd className="mt-1 text-sm text-white font-mono bg-gray-800 px-2 py-1 rounded inline-block">{instance.baseUrl}</dd>
+                                    <dd className="mt-1 text-sm text-white font-mono bg-gray-800 px-2 py-1 rounded-sm inline-block">{instance.baseUrl}</dd>
                                 </div>
                                 <div>
                                     <dt className="text-sm font-medium text-gray-400">Poll Interval</dt>
@@ -253,7 +253,7 @@ export default function OverseerrSettings() {
                             </div>
                             <button
                                 onClick={handleToggleWebhook}
-                                className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${settings.webhookEnabled ? 'bg-blue-600' : 'bg-gray-700'
+                                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden ${settings.webhookEnabled ? 'bg-blue-600' : 'bg-gray-700'
                                     }`}
                             >
                                 <span
@@ -285,9 +285,9 @@ export default function OverseerrSettings() {
                                     />
                                     <div className="mt-2 text-xs text-gray-500 space-y-1">
                                         <p className="font-medium text-gray-400">Common configurations:</p>
-                                        <p>Same Docker network: <code className="bg-gray-800 px-1.5 py-0.5 rounded">http://langarr:8383</code></p>
-                                        <p>Same host machine: <code className="bg-gray-800 px-1.5 py-0.5 rounded">http://localhost:&lt;port&gt;</code></p>
-                                        <p>Different machine: <code className="bg-gray-800 px-1.5 py-0.5 rounded">http://&lt;server-ip&gt;:&lt;port&gt;</code></p>
+                                        <p>Same Docker network: <code className="bg-gray-800 px-1.5 py-0.5 rounded-sm">http://langarr:8383</code></p>
+                                        <p>Same host machine: <code className="bg-gray-800 px-1.5 py-0.5 rounded-sm">http://localhost:&lt;port&gt;</code></p>
+                                        <p>Different machine: <code className="bg-gray-800 px-1.5 py-0.5 rounded-sm">http://&lt;server-ip&gt;:&lt;port&gt;</code></p>
                                     </div>
                                 </div>
 
@@ -302,7 +302,7 @@ export default function OverseerrSettings() {
                                                     type="text"
                                                     readOnly
                                                     value={webhookUrl}
-                                                    className="flex-1 rounded-l-md border-gray-700 bg-gray-800 text-white text-sm font-mono p-2.5 focus:outline-none"
+                                                    className="flex-1 rounded-l-md border-gray-700 bg-gray-800 text-white text-sm font-mono p-2.5 focus:outline-hidden"
                                                 />
                                                 <button
                                                     onClick={copyToClipboard}

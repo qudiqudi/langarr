@@ -71,7 +71,7 @@ export default function SonarrSettings() {
             <div className="space-y-6 px-4 py-6 sm:px-6 lg:px-8">
                 <div className="md:flex md:items-center md:justify-between">
                     <div className="min-w-0 flex-1">
-                        <h2 className="text-2xl font-bold leading-7 text-white sm:truncate sm:text-3xl sm:tracking-tight">
+                        <h2 className="text-2xl font-bold leading-7 text-white sm:truncate sm:text-3xl sm:leading-9 sm:tracking-tight">
                             Sonarr Instances
                         </h2>
                         <p className="mt-2 text-sm text-gray-400">
@@ -84,7 +84,7 @@ export default function SonarrSettings() {
                         <button
                             type="button"
                             onClick={handleAdd}
-                            className="ml-3 inline-flex items-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+                            className="ml-3 inline-flex items-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-xs hover:bg-indigo-500 focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
                         >
                             <PlusIcon className="-ml-0.5 mr-1.5 h-5 w-5" aria-hidden="true" />
                             Add Instance
@@ -94,14 +94,14 @@ export default function SonarrSettings() {
 
                 {/* List of Instances */}
                 {(!instances || instances.length === 0) ? (
-                    <div className="rounded-lg bg-gray-900 shadow-sm ring-1 ring-gray-800 p-12 text-center">
+                    <div className="rounded-lg bg-gray-900 shadow-xs ring-1 ring-gray-800 p-12 text-center">
                         <h3 className="mt-2 text-sm font-semibold text-white">No instances</h3>
                         <p className="mt-1 text-sm text-gray-500">Get started by adding a Sonarr instance.</p>
                         <div className="mt-6">
                             <button
                                 type="button"
                                 onClick={handleAdd}
-                                className="inline-flex items-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+                                className="inline-flex items-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-xs hover:bg-indigo-500 focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
                             >
                                 <PlusIcon className="-ml-0.5 mr-1.5 h-5 w-5" aria-hidden="true" />
                                 Add Instance
@@ -111,7 +111,7 @@ export default function SonarrSettings() {
                 ) : (
                     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                         {instances.map((instance) => (
-                            <div key={instance.id} className={`relative flex flex-col rounded-lg border ${instance.enabled ? 'border-gray-700 bg-gray-800' : 'border-gray-800 bg-gray-900 opacity-75'} p-6 shadow-sm hover:border-indigo-500 transition-colors`}>
+                            <div key={instance.id} className={`relative flex flex-col rounded-lg border ${instance.enabled ? 'border-gray-700 bg-gray-800' : 'border-gray-800 bg-gray-900 opacity-75'} p-6 shadow-xs hover:border-indigo-500 transition-colors`}>
                                 <div className="flex-1">
                                     <div className="flex items-center justify-between">
                                         <h3 className="text-lg font-medium text-white">{instance.name}</h3>
