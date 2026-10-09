@@ -1,9 +1,10 @@
 {
     "extends": "./tsconfig.json",
     "compilerOptions": {
-        "module": "commonjs",
-        "moduleResolution": "node",
+        "module": "node20",
+        "moduleResolution": "node16",
         "noEmit": false,
+        "rootDir": ".",
         "outDir": "dist",
         "target": "es2019",
         "isolatedModules": false,
