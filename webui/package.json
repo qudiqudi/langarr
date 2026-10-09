@@ -5,12 +5,12 @@
   "scripts": {
     "dev": "concurrently \"npm run dev:server\" \"npm run dev:next\"",
     "dev:next": "next dev",
-    "dev:server": "ts-node --transpile-only --compiler-options '{\"module\":\"commonjs\",\"moduleResolution\":\"node\"}' server/index.ts",
+    "dev:server": "ts-node --transpile-only --project tsconfig.server.json server/index.ts",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
     "type-check": "tsc --noEmit",
-    "test": "ts-node --transpile-only --compiler-options '{\"module\":\"commonjs\",\"moduleResolution\":\"node\"}' server/tests/audioTagProcessor.test.ts",
+    "test": "ts-node --transpile-only --project tsconfig.server.json server/tests/audioTagProcessor.test.ts",
     "prepare": "husky || true"
   },
   "dependencies": {
@@ -52,7 +52,7 @@
     "postcss": "^8",
     "tailwindcss": "^3.4.1",
     "ts-node": "^10.9.2",
-    "typescript": "^5"
+    "typescript": "^6"
   },
   "lint-staged": {
     "*.{ts,tsx}": [
