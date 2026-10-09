@@ -813,7 +813,10 @@ export class SyncService {
 
                 // Fetch the actual ArrInstance
                 const arrRepo = isMovie ? getRepository(RadarrInstance) : getRepository(SonarrInstance);
-                const arrInstance = await arrRepo.findOne({ where: { name: instanceName }, select: ['id', 'name', 'baseUrl', 'apiKey', 'originalLanguages', 'originalProfile', 'dubProfile'] });
+                const arrInstance = await arrRepo.findOne({
+                    where: { name: instanceName },
+                    select: { id: true, name: true, baseUrl: true, apiKey: true, originalLanguages: true, originalProfile: true, dubProfile: true },
+                });
 
                 if (!arrInstance) {
                     await this.log('error', `Mapped instance '${instanceName}' not found in Langarr DB.`);
