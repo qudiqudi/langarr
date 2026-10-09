@@ -84,7 +84,7 @@ export default function AudioTagEditor({ value = [], onChange, label }: AudioTag
                     <Combobox value={newLang} onChange={(val) => setNewLang(val || '')}>
                         {({ open }) => (
                             <>
-                                <div className="relative w-full cursor-default overflow-hidden rounded-md bg-gray-800 text-left shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-opacity-75 focus-visible:ring-offset-2 focus-visible:ring-offset-teal-300 sm:text-sm">
+                                <div className="relative w-full cursor-default overflow-hidden rounded-md bg-gray-800 text-left shadow-md focus:outline-hidden focus-visible:ring-2 focus-visible:ring-white/75 focus-visible:ring-offset-2 focus-visible:ring-offset-teal-300 sm:text-sm">
                                     <Combobox.Input
                                         className="w-full border-none py-1.5 pl-3 pr-10 text-sm leading-5 text-gray-100 bg-gray-800 focus:ring-0"
                                         displayValue={(code: string) => getLangDisplay(code)}
@@ -111,7 +111,7 @@ export default function AudioTagEditor({ value = [], onChange, label }: AudioTag
                                 >
                                     <Combobox.Options
                                         anchor="bottom start"
-                                        className="w-[var(--input-width)] max-h-60 overflow-auto rounded-md bg-gray-700 py-1 text-base shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none sm:text-sm z-50"
+                                        className="w-(--input-width) max-h-60 overflow-auto rounded-md bg-gray-700 py-1 text-base shadow-lg ring-1 ring-black/5 focus:outline-hidden sm:text-sm z-50"
                                     >
                                         {filteredLanguages.length === 0 && query !== '' ? (
                                             <div className="relative cursor-default select-none py-2 px-4 text-gray-300">
@@ -152,7 +152,7 @@ export default function AudioTagEditor({ value = [], onChange, label }: AudioTag
                     <input
                         type="text"
                         placeholder="Tag Name (e.g. audio-fr)"
-                        className="block w-full rounded-md border-0 bg-gray-800 py-1.5 text-white shadow-sm ring-1 ring-inset ring-gray-700 focus:ring-2 focus:ring-inset focus:ring-indigo-500 sm:text-sm sm:leading-6"
+                        className="block w-full rounded-md border-0 bg-gray-800 py-1.5 text-white shadow-xs ring-1 ring-inset ring-gray-700 focus:ring-2 focus:ring-inset focus:ring-indigo-500 sm:text-sm sm:leading-6"
                         value={newTag}
                         onChange={(e) => setNewTag(e.target.value)}
                     />
@@ -162,7 +162,7 @@ export default function AudioTagEditor({ value = [], onChange, label }: AudioTag
                         type="button"
                         onClick={handleAdd}
                         disabled={!newLang || !newTag.trim()}
-                        className="flex w-full items-center justify-center rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:opacity-50"
+                        className="flex w-full items-center justify-center rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-semibold text-white shadow-xs hover:bg-indigo-500 disabled:opacity-50"
                     >
                         <PlusIcon className="h-5 w-5" aria-hidden="true" />
                     </button>

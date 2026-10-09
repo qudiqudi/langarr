@@ -77,7 +77,7 @@ export default function Sidebar() {
               }`}
             >
               <item.icon
-                className={`mr-3 h-5 w-5 flex-shrink-0 ${
+                className={`mr-3 h-5 w-5 shrink-0 ${
                   isActive(item.href)
                     ? 'text-white'
                     : 'text-gray-400 group-hover:text-white'

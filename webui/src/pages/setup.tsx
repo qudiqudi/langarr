@@ -160,7 +160,7 @@ export default function SetupPage() {
             </div>
 
             <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-                <div className="bg-gray-800 py-8 px-4 shadow sm:rounded-lg sm:px-10">
+                <div className="bg-gray-800 py-8 px-4 shadow-sm sm:rounded-lg sm:px-10">
                     {step === 1 && (
                         <div className="space-y-6">
                             <div>
@@ -179,7 +179,7 @@ export default function SetupPage() {
                                             min="1"
                                             value={formData.syncInterval || ''}
                                             onChange={handleSyncIntervalChange}
-                                            className={`mt-1 block w-full rounded-md ${errors.syncInterval ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : 'border-gray-600 focus:border-blue-500 focus:ring-blue-500'} bg-gray-700 text-white shadow-sm sm:text-sm`}
+                                            className={`mt-1 block w-full rounded-md ${errors.syncInterval ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : 'border-gray-600 focus:border-blue-500 focus:ring-blue-500'} bg-gray-700 text-white shadow-xs sm:text-sm`}
                                         />
                                         {errors.syncInterval && (
                                             <p className="mt-1 text-sm text-red-500">{errors.syncInterval}</p>
@@ -193,7 +193,7 @@ export default function SetupPage() {
                                                 type="checkbox"
                                                 checked={formData.dryRunMode}
                                                 onChange={(e) => setFormData({ ...formData, dryRunMode: e.target.checked })}
-                                                className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                                className="h-4 w-4 rounded-sm border-gray-300 text-blue-600 focus:ring-blue-500"
                                             />
                                         </div>
                                         <div className="ml-3 text-sm">
@@ -207,7 +207,7 @@ export default function SetupPage() {
                             <div className="flex justify-end">
                                 <button
                                     onClick={handleNext}
-                                    className="flex w-full justify-center rounded-md border border-transparent bg-blue-600 py-2 px-4 text-sm font-medium text-white shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                                    className="flex w-full justify-center rounded-md border border-transparent bg-blue-600 py-2 px-4 text-sm font-medium text-white shadow-xs hover:bg-blue-700 focus:outline-hidden focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
                                 >
                                     Next
                                 </button>
@@ -239,7 +239,7 @@ export default function SetupPage() {
                                         {radarrInstances.length > 0 && (
                                             <div className="mt-2 space-y-2">
                                                 {radarrInstances.map((instance) => (
-                                                    <div key={instance.id} className="bg-gray-700 rounded px-3 py-2 text-sm">
+                                                    <div key={instance.id} className="bg-gray-700 rounded-sm px-3 py-2 text-sm">
                                                         <div className="flex items-center justify-between">
                                                             <span className="text-white font-medium">{instance.name}</span>
                                                             <span className={`text-xs ${instance.enabled ? 'text-green-400' : 'text-gray-400'}`}>
@@ -268,7 +268,7 @@ export default function SetupPage() {
                                         {sonarrInstances.length > 0 && (
                                             <div className="mt-2 space-y-2">
                                                 {sonarrInstances.map((instance) => (
-                                                    <div key={instance.id} className="bg-gray-700 rounded px-3 py-2 text-sm">
+                                                    <div key={instance.id} className="bg-gray-700 rounded-sm px-3 py-2 text-sm">
                                                         <div className="flex items-center justify-between">
                                                             <span className="text-white font-medium">{instance.name}</span>
                                                             <span className={`text-xs ${instance.enabled ? 'text-green-400' : 'text-gray-400'}`}>
@@ -287,13 +287,13 @@ export default function SetupPage() {
                             <div className="flex gap-3">
                                 <button
                                     onClick={handleBack}
-                                    className="flex w-full justify-center rounded-md border border-gray-600 bg-gray-700 py-2 px-4 text-sm font-medium text-white shadow-sm hover:bg-gray-600 focus:outline-none"
+                                    className="flex w-full justify-center rounded-md border border-gray-600 bg-gray-700 py-2 px-4 text-sm font-medium text-white shadow-xs hover:bg-gray-600 focus:outline-hidden"
                                 >
                                     Back
                                 </button>
                                 <button
                                     onClick={handleNext}
-                                    className="flex w-full justify-center rounded-md border border-transparent bg-blue-600 py-2 px-4 text-sm font-medium text-white shadow-sm hover:bg-blue-700 focus:outline-none"
+                                    className="flex w-full justify-center rounded-md border border-transparent bg-blue-600 py-2 px-4 text-sm font-medium text-white shadow-xs hover:bg-blue-700 focus:outline-hidden"
                                 >
                                     Next
                                 </button>
@@ -313,14 +313,14 @@ export default function SetupPage() {
                             <div className="flex gap-3">
                                 <button
                                     onClick={handleBack}
-                                    className="flex w-full justify-center rounded-md border border-gray-600 bg-gray-700 py-2 px-4 text-sm font-medium text-white shadow-sm hover:bg-gray-600 focus:outline-none"
+                                    className="flex w-full justify-center rounded-md border border-gray-600 bg-gray-700 py-2 px-4 text-sm font-medium text-white shadow-xs hover:bg-gray-600 focus:outline-hidden"
                                 >
                                     Back
                                 </button>
                                 <button
                                     onClick={handleFinish}
                                     disabled={loading}
-                                    className="flex w-full justify-center rounded-md border border-transparent bg-green-600 py-2 px-4 text-sm font-medium text-white shadow-sm hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
+                                    className="flex w-full justify-center rounded-md border border-transparent bg-green-600 py-2 px-4 text-sm font-medium text-white shadow-xs hover:bg-green-700 focus:outline-hidden focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
                                 >
                                     {loading ? 'Saving...' : 'Finish'}
                                 </button>

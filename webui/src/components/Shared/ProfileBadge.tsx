@@ -8,7 +8,7 @@ interface ProfileBadgeProps {
 }
 
 export default function ProfileBadge({ type, label, className = '', size = 'sm' }: ProfileBadgeProps) {
-    const baseClasses = "inline-flex items-center rounded font-medium border";
+    const baseClasses = "inline-flex items-center rounded-sm font-medium border";
 
     const sizeClasses = size === 'xs'
         ? "px-1.5 py-0 text-[10px]"

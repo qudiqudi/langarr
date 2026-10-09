@@ -187,7 +187,7 @@ export default function OverseerrModal({ isOpen, onClose, onSave, instance }: Ov
                     leaveFrom="opacity-100"
                     leaveTo="opacity-0"
                 >
-                    <div className="fixed inset-0 bg-gray-950 bg-opacity-75 transition-opacity" />
+                    <div className="fixed inset-0 bg-gray-950/75 transition-opacity" />
                 </Transition.Child>
 
                 <div className="fixed inset-0 z-10 overflow-y-auto">
@@ -226,7 +226,7 @@ export default function OverseerrModal({ isOpen, onClose, onSave, instance }: Ov
                                                 <input
                                                     type="text"
                                                     {...formik.getFieldProps('name')}
-                                                    className="mt-2 block w-full rounded-md border-0 bg-gray-800 py-1.5 text-white shadow-sm ring-1 ring-inset ring-gray-700 focus:ring-2 focus:ring-inset focus:ring-indigo-500 sm:text-sm sm:leading-6"
+                                                    className="mt-2 block w-full rounded-md border-0 bg-gray-800 py-1.5 text-white shadow-xs ring-1 ring-inset ring-gray-700 focus:ring-2 focus:ring-inset focus:ring-indigo-500 sm:text-sm sm:leading-6"
                                                 />
                                                 {formik.touched.name && formik.errors.name && (
                                                     <p className="text-red-500 text-xs mt-1">{formik.errors.name}</p>
@@ -247,7 +247,7 @@ export default function OverseerrModal({ isOpen, onClose, onSave, instance }: Ov
                                                     type="text"
                                                     {...formik.getFieldProps('baseUrl')}
                                                     placeholder="http://overseerr:5055"
-                                                    className="mt-2 block w-full rounded-md border-0 bg-gray-800 py-1.5 text-white shadow-sm ring-1 ring-inset ring-gray-700 focus:ring-2 focus:ring-inset focus:ring-indigo-500 sm:text-sm sm:leading-6"
+                                                    className="mt-2 block w-full rounded-md border-0 bg-gray-800 py-1.5 text-white shadow-xs ring-1 ring-inset ring-gray-700 focus:ring-2 focus:ring-inset focus:ring-indigo-500 sm:text-sm sm:leading-6"
                                                 />
                                                 {formik.touched.baseUrl && formik.errors.baseUrl && (
                                                     <p className="text-red-500 text-xs mt-1">{formik.errors.baseUrl}</p>
@@ -261,9 +261,9 @@ export default function OverseerrModal({ isOpen, onClose, onSave, instance }: Ov
                                                         type="password"
                                                         {...formik.getFieldProps('apiKey')}
                                                         placeholder={isEdit ? 'Leave empty to keep unchanged' : ''}
-                                                        className="mt-2 block w-full rounded-md border-0 bg-gray-800 py-1.5 text-white shadow-sm ring-1 ring-inset ring-gray-700 focus:ring-2 focus:ring-inset focus:ring-indigo-500 sm:text-sm sm:leading-6"
+                                                        className="mt-2 block w-full rounded-md border-0 bg-gray-800 py-1.5 text-white shadow-xs ring-1 ring-inset ring-gray-700 focus:ring-2 focus:ring-inset focus:ring-indigo-500 sm:text-sm sm:leading-6"
                                                     />
-                                                    <button type="button" onClick={testConnection} disabled={testing} className="mt-2 rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:opacity-50">
+                                                    <button type="button" onClick={testConnection} disabled={testing} className="mt-2 rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-semibold text-white shadow-xs hover:bg-indigo-500 disabled:opacity-50">
                                                         {testing ? '...' : 'Test'}
                                                     </button>
                                                 </div>
@@ -277,7 +277,7 @@ export default function OverseerrModal({ isOpen, onClose, onSave, instance }: Ov
                                                 <input
                                                     type="number"
                                                     {...formik.getFieldProps('pollIntervalMinutes')}
-                                                    className="mt-2 block w-full rounded-md border-0 bg-gray-800 py-1.5 text-white shadow-sm ring-1 ring-inset ring-gray-700 focus:ring-2 focus:ring-inset focus:ring-indigo-500 sm:text-sm sm:leading-6"
+                                                    className="mt-2 block w-full rounded-md border-0 bg-gray-800 py-1.5 text-white shadow-xs ring-1 ring-inset ring-gray-700 focus:ring-2 focus:ring-inset focus:ring-indigo-500 sm:text-sm sm:leading-6"
                                                 />
                                                 {formik.touched.pollIntervalMinutes && formik.errors.pollIntervalMinutes && (
                                                     <p className="text-red-500 text-xs mt-1">{formik.errors.pollIntervalMinutes}</p>
@@ -302,7 +302,7 @@ export default function OverseerrModal({ isOpen, onClose, onSave, instance }: Ov
                                                                     <select
                                                                         value={formik.values.radarrServerMappings[server.id] || ''}
                                                                         onChange={(e) => updateMapping('radarr', server.id, e.target.value)}
-                                                                        className="block w-48 rounded-md border-0 bg-gray-800 py-1.5 text-white shadow-sm ring-1 ring-inset ring-gray-700 focus:ring-2 focus:ring-inset focus:ring-indigo-500 sm:text-sm sm:leading-6"
+                                                                        className="block w-48 rounded-md border-0 bg-gray-800 py-1.5 text-white shadow-xs ring-1 ring-inset ring-gray-700 focus:ring-2 focus:ring-inset focus:ring-indigo-500 sm:text-sm sm:leading-6"
                                                                     >
                                                                         <option value="">-- Ignore --</option>
                                                                         {radarrInstances?.map(inst => (
@@ -326,7 +326,7 @@ export default function OverseerrModal({ isOpen, onClose, onSave, instance }: Ov
                                                                     <select
                                                                         value={formik.values.sonarrServerMappings[server.id] || ''}
                                                                         onChange={(e) => updateMapping('sonarr', server.id, e.target.value)}
-                                                                        className="block w-48 rounded-md border-0 bg-gray-800 py-1.5 text-white shadow-sm ring-1 ring-inset ring-gray-700 focus:ring-2 focus:ring-inset focus:ring-indigo-500 sm:text-sm sm:leading-6"
+                                                                        className="block w-48 rounded-md border-0 bg-gray-800 py-1.5 text-white shadow-xs ring-1 ring-inset ring-gray-700 focus:ring-2 focus:ring-inset focus:ring-indigo-500 sm:text-sm sm:leading-6"
                                                                     >
                                                                         <option value="">-- Ignore --</option>
                                                                         {sonarrInstances?.map(inst => (
@@ -345,13 +345,13 @@ export default function OverseerrModal({ isOpen, onClose, onSave, instance }: Ov
                                             <button
                                                 type="submit"
                                                 disabled={formik.isSubmitting}
-                                                className="inline-flex w-full justify-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 sm:col-start-2 disabled:opacity-50"
+                                                className="inline-flex w-full justify-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-xs hover:bg-indigo-500 focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 sm:col-start-2 disabled:opacity-50"
                                             >
                                                 {isEdit ? 'Save Changes' : 'Add Instance'}
                                             </button>
                                             <button
                                                 type="button"
-                                                className="mt-3 inline-flex w-full justify-center rounded-md bg-gray-800 px-3 py-2 text-sm font-semibold text-gray-300 shadow-sm ring-1 ring-inset ring-gray-600 hover:bg-gray-700 sm:col-start-1 sm:mt-0"
+                                                className="mt-3 inline-flex w-full justify-center rounded-md bg-gray-800 px-3 py-2 text-sm font-semibold text-gray-300 shadow-xs ring-1 ring-inset ring-gray-600 hover:bg-gray-700 sm:col-start-1 sm:mt-0"
                                                 onClick={onClose}
                                             >
                                                 Cancel

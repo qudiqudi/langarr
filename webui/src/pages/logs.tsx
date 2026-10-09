@@ -98,7 +98,7 @@ export default function LogsPage() {
 
             <div className="md:flex md:items-center md:justify-between">
                 <div className="min-w-0 flex-1">
-                    <h2 className="text-2xl font-bold leading-7 text-white sm:truncate sm:text-3xl sm:tracking-tight">
+                    <h2 className="text-2xl font-bold leading-7 text-white sm:truncate sm:text-3xl sm:leading-9 sm:tracking-tight">
                         System Logs
                     </h2>
                 </div>
@@ -106,14 +106,14 @@ export default function LogsPage() {
                     <button
                         onClick={() => fetchLogs(true)}
                         disabled={isRefreshing}
-                        className={`ml-3 inline-flex items-center rounded-md bg-white/10 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-white/20 ${isRefreshing ? 'opacity-75 cursor-not-allowed' : ''}`}
+                        className={`ml-3 inline-flex items-center rounded-md bg-white/10 px-3 py-2 text-sm font-semibold text-white shadow-xs hover:bg-white/20 ${isRefreshing ? 'opacity-75 cursor-not-allowed' : ''}`}
                     >
                         <ArrowPathIcon className={`-ml-0.5 mr-1.5 h-5 w-5 ${isRefreshing ? 'animate-spin' : ''}`} aria-hidden="true" />
                         {isRefreshing ? 'Refreshing...' : 'Refresh'}
                     </button>
                     <button
                         onClick={() => setShowClearModal(true)}
-                        className="ml-3 inline-flex items-center rounded-md bg-red-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-red-500"
+                        className="ml-3 inline-flex items-center rounded-md bg-red-600 px-3 py-2 text-sm font-semibold text-white shadow-xs hover:bg-red-500"
                     >
                         <TrashIcon className="-ml-0.5 mr-1.5 h-5 w-5" aria-hidden="true" />
                         Clear
@@ -146,7 +146,7 @@ export default function LogsPage() {
             </div>
 
             {/* Logs Table */}
-            <div className="overflow-hidden bg-gray-900 shadow ring-1 ring-white/10 sm:rounded-lg">
+            <div className="overflow-hidden bg-gray-900 shadow-sm ring-1 ring-white/10 sm:rounded-lg">
                 <table className="min-w-full divide-y divide-gray-700">
                     <thead className="bg-gray-800">
                         <tr>
@@ -223,7 +223,7 @@ export default function LogsPage() {
                             >
                                 <Dialog.Panel className="relative transform overflow-hidden rounded-lg bg-gray-800 px-4 pb-4 pt-5 text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-lg sm:p-6">
                                     <div className="sm:flex sm:items-start">
-                                        <div className="mx-auto flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-red-100 sm:mx-0 sm:h-10 sm:w-10">
+                                        <div className="mx-auto flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-red-100 sm:mx-0 sm:h-10 sm:w-10">
                                             <ExclamationTriangleIcon className="h-6 w-6 text-red-600" aria-hidden="true" />
                                         </div>
                                         <div className="mt-3 text-center sm:ml-4 sm:mt-0 sm:text-left">
@@ -240,14 +240,14 @@ export default function LogsPage() {
                                     <div className="mt-5 sm:mt-4 sm:flex sm:flex-row-reverse">
                                         <button
                                             type="button"
-                                            className="inline-flex w-full justify-center rounded-md bg-red-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-red-500 sm:ml-3 sm:w-auto"
+                                            className="inline-flex w-full justify-center rounded-md bg-red-600 px-3 py-2 text-sm font-semibold text-white shadow-xs hover:bg-red-500 sm:ml-3 sm:w-auto"
                                             onClick={confirmClearLogs}
                                         >
                                             Clear Logs
                                         </button>
                                         <button
                                             type="button"
-                                            className="mt-3 inline-flex w-full justify-center rounded-md bg-white/10 px-3 py-2 text-sm font-semibold text-white shadow-sm ring-1 ring-inset ring-gray-600 hover:bg-white/20 sm:mt-0 sm:w-auto"
+                                            className="mt-3 inline-flex w-full justify-center rounded-md bg-white/10 px-3 py-2 text-sm font-semibold text-white shadow-xs ring-1 ring-inset ring-gray-600 hover:bg-white/20 sm:mt-0 sm:w-auto"
                                             onClick={() => setShowClearModal(false)}
                                         >
                                             Cancel
