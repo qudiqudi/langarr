@@ -31,7 +31,7 @@
     "react-hot-toast": "^2.6.1",
     "reflect-metadata": "^0.2.2",
     "swr": "^2.5.1",
-    "typeorm": "^0.3.28",
+    "typeorm": "^1.1.1",
     "uuid": "^14.0.2",
     "yup": "^1.7.1"
   },

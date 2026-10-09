@@ -124,7 +124,11 @@ router.post('/:id/test', async (req, res) => {
         const repo = getRepository(SonarrInstance);
         const instance = await repo.findOne({
             where: { id: parseInt(req.params.id) },
-            select: ['id', 'baseUrl', 'apiKey']
+            select: {
+                id: true,
+                baseUrl: true,
+                apiKey: true
+            }
         });
 
         if (!instance) {
@@ -150,7 +154,11 @@ router.get('/:id/profiles', async (req, res) => {
         const repo = getRepository(SonarrInstance);
         const instance = await repo.findOne({
             where: { id: parseInt(req.params.id) },
-            select: ['id', 'baseUrl', 'apiKey']
+            select: {
+                id: true,
+                baseUrl: true,
+                apiKey: true
+            }
         });
         if (!instance) return res.status(404).json({ error: 'Instance not found' });
 
@@ -167,7 +175,11 @@ router.get('/:id/tags', async (req, res) => {
         const repo = getRepository(SonarrInstance);
         const instance = await repo.findOne({
             where: { id: parseInt(req.params.id) },
-            select: ['id', 'baseUrl', 'apiKey']
+            select: {
+                id: true,
+                baseUrl: true,
+                apiKey: true
+            }
         });
         if (!instance) return res.status(404).json({ error: 'Instance not found' });
 

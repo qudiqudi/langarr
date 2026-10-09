@@ -133,7 +133,11 @@ router.post('/:id/test', async (req, res) => {
         const repo = getRepository(OverseerrInstance);
         const instance = await repo.findOne({
             where: { id: parseInt(req.params.id) },
-            select: ['id', 'baseUrl', 'apiKey']
+            select: {
+                id: true,
+                baseUrl: true,
+                apiKey: true
+            }
         });
 
         if (!instance) {
@@ -171,7 +175,11 @@ router.get('/:id/servers', async (req, res) => {
         const repo = getRepository(OverseerrInstance);
         const instance = await repo.findOne({
             where: { id: parseInt(req.params.id) },
-            select: ['id', 'baseUrl', 'apiKey']
+            select: {
+                id: true,
+                baseUrl: true,
+                apiKey: true
+            }
         });
         if (!instance) return res.status(404).json({ error: 'Instance not found' });
 
