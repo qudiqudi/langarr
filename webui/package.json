@@ -8,7 +8,7 @@
     "dev:server": "ts-node --transpile-only --project tsconfig.server.json server/index.ts",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
+    "lint": "eslint src",
     "type-check": "tsc --noEmit",
     "test": "ts-node --transpile-only --project tsconfig.server.json server/tests/audioTagProcessor.test.ts",
     "prepare": "husky || true"
@@ -25,7 +25,7 @@
     "formik": "^2.4.9",
     "iso-639-1": "^3.1.6",
     "js-yaml": "^5.4.2",
-    "next": "15.5.27",
+    "next": "16.3.8",
     "react": "^18",
     "react-dom": "^18",
     "react-hot-toast": "^2.6.1",
@@ -45,8 +45,8 @@
     "@types/react": "^18",
     "@types/react-dom": "^18",
     "concurrently": "^10.0.5",
-    "eslint": "^8",
-    "eslint-config-next": "15.5.27",
+    "eslint": "^9",
+    "eslint-config-next": "16.3.8",
     "husky": "^9.1.7",
     "lint-staged": "^17.6.0",
     "postcss": "^8",
@@ -56,8 +56,10 @@
   },
   "lint-staged": {
     "*.{ts,tsx}": [
-      "bash -c 'tsc --noEmit'",
-      "next lint"
+      "bash -c 'tsc --noEmit'"
+    ],
+    "src/**/*.{ts,tsx}": [
+      "eslint"
     ]
   },
   "allowScripts": {
