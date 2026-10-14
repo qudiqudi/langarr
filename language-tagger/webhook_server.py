@@ -19,9 +19,9 @@ from flask import Flask, request, jsonify
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from typing import Dict, Optional, List, Tuple
-from threading import Thread
+from threading import Thread, Timer
 
-from constants import INSECURE_BYPASS_TOKEN
+from constants import INSECURE_BYPASS_TOKEN, SEARCH_FAILED
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +35,10 @@ APPROVED_TYPES = ('MEDIA_AUTO_APPROVED', 'MEDIA_APPROVED')
 # be missing for some seconds. Approved requests retry the lookup with these waits
 # (30.5 s plus the API time); a pending request is not in Radarr/Sonarr yet, one try.
 ITEM_LOOKUP_DELAYS = (0.5, 1, 2, 4, 8, 15)
+
+# An approved request whose search could not start (request or series not readable,
+# item not in Radarr/Sonarr yet, command failed) is processed again after these waits.
+RETRY_DELAYS = (60, 300, 900)
 
 
 class WebhookServer:
@@ -75,6 +79,8 @@ class WebhookServer:
         # Process requests in a background thread, so a slow lookup (retries) does not
         # hold the HTTP response that Seerr waits for. Tests set this to False.
         self.process_async = True
+        # Starts a delayed retry: (delay_seconds, function, payload). Tests replace it.
+        self.retry_timer = self._start_timer
 
         # Create Flask app
         self.app = Flask(__name__)
@@ -182,6 +188,10 @@ class WebhookServer:
                 logger.warning(f"Webhook request with empty payload from {get_remote_address()}")
                 return jsonify({'error': 'Empty payload'}), 400
 
+            # Internal retry keys (_langarr_*) are only set by schedule_retry, never by a sender
+            if isinstance(payload, dict):
+                payload = {k: v for k, v in payload.items() if not str(k).startswith('_langarr_')}
+
             # Validate payload structure
             is_valid, error_msg = self.validate_webhook_payload(payload)
             if not is_valid:
@@ -218,6 +228,8 @@ class WebhookServer:
         4. Update profile in Radarr/Sonarr, without the profile-change search
         5. For an approved request only: trigger one search (for a TV request the
            requested seasons, see ArrInstance._series_search_command)
+        6. If the search of an approved request could not start, retry later
+           (RETRY_DELAYS) for the instances that failed
         """
         try:
             # Extract media info
@@ -229,6 +241,8 @@ class WebhookServer:
             notification_type = payload.get('notification_type')
             request_data = payload.get('request', {})
             request_id = request_data.get('request_id')
+            approved = notification_type in APPROVED_TYPES
+            only_instances = payload.get('_langarr_only')  # set by a retry
 
             if not tmdb_id or not media_type:
                 logger.warning(f"Webhook missing tmdb_id or media_type: {payload}")
@@ -262,17 +276,27 @@ class WebhookServer:
             # carries neither. An unmapped movie request needs neither.
             mapping = overseerr.radarr_mapping if service_type == 'radarr' else overseerr.sonarr_mapping
             request_obj = None
-            if (mapping or media_type == 'tv') and str(request_id or '').isdigit():
+            needs_request = bool(mapping) or media_type == 'tv'
+            if needs_request and str(request_id or '').isdigit():
                 request_obj = overseerr.get_request(int(request_id))
 
+            seasons = self.requested_seasons(request_obj) if media_type == 'tv' else None
+            if approved and needs_request and (request_obj is None or (media_type == 'tv' and not seasons)):
+                # Without the request there is no target server, and for TV no season
+                # scope: never fall back to a search of the whole series.
+                logger.warning(f"Request {request_id}: could not read its server/seasons; no search at this time")
+                self.schedule_retry(payload, only_instances, "request not readable")
+                return
+
             arr_instances = self.select_arr_instances(overseerr, service_type, request_id, request_obj)
+            if only_instances:
+                arr_instances = [arr for arr in arr_instances if arr.name in only_instances]
 
             if not arr_instances:
                 return
 
-            seasons = self.requested_seasons(request_obj) if media_type == 'tv' else None
-            approved = notification_type in APPROVED_TYPES
             attempts = len(ITEM_LOOKUP_DELAYS) if approved else 1
+            failed = []
 
             # Process each arr instance
             for arr in arr_instances:
@@ -292,6 +316,8 @@ class WebhookServer:
                 if not item:
                     logger.warning(f"[{arr.name}] Could not find {media_type} with TMDB ID {tmdb_id} "
                                    f"after {attempts} attempt(s) (may not be added yet)")
+                    if approved:
+                        failed.append(arr.name)
                     continue
 
                 item_id = item.get('id')
@@ -315,10 +341,35 @@ class WebhookServer:
                 # Trigger search for approved requests so the item starts downloading,
                 # bypassing trigger_search_on_update since the request is explicit user intent.
                 # For TV, search only the requested seasons.
-                arr.trigger_search_for_item(item_id, endpoint, force=True, seasons=seasons)
+                if arr.dispatch_search(item_id, endpoint, force=True, seasons=seasons) == SEARCH_FAILED:
+                    failed.append(arr.name)
+
+            if failed:
+                self.schedule_retry(payload, failed, "search could not start")
 
         except Exception as e:
             logger.error(f"Error processing media request: {e}", exc_info=True)
+
+    def schedule_retry(self, payload: Dict, instance_names: Optional[List[str]], reason: str):
+        """Process an approved request again later, only for the instances that failed."""
+        attempt = int(payload.get('_langarr_attempt', 0))
+        request_id = (payload.get('request') or {}).get('request_id')
+        if attempt >= len(RETRY_DELAYS):
+            logger.warning(f"Request {request_id}: {reason}; giving up after {attempt} retries "
+                           f"(search it manually, or the RSS sync finds new releases)")
+            return
+        retry = dict(payload)
+        retry['_langarr_attempt'] = attempt + 1
+        retry['_langarr_only'] = list(instance_names) if instance_names else None
+        delay = RETRY_DELAYS[attempt]
+        logger.info(f"Request {request_id}: {reason}; retry {attempt + 1}/{len(RETRY_DELAYS)} in {delay}s")
+        self.retry_timer(delay, self.process_media_request, retry)
+
+    @staticmethod
+    def _start_timer(delay: float, function, payload: Dict):
+        timer = Timer(delay, function, args=(payload,))
+        timer.daemon = True
+        timer.start()
 
     @staticmethod
     def find_item_with_retry(arr, tmdb_id: int, attempts: int) -> Optional[Dict]:

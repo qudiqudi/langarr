@@ -28,8 +28,12 @@ from typing import List, Dict, Optional, Set
 from pathlib import Path
 from overseerr_integration import OverseerrInstance
 from webhook_server import WebhookServer
-from constants import INSECURE_BYPASS_TOKEN
+from constants import INSECURE_BYPASS_TOKEN, SEARCH_FAILED, SEARCH_SENT, SEARCH_SKIPPED
 from api_client import APIClient
+
+
+class SearchScopeError(Exception):
+    """The seasons of a scoped series search could not be read; retry later."""
 
 # Configure logging
 logging.basicConfig(
@@ -275,63 +279,78 @@ class ArrInstance(APIClient):
                 are searched (see _series_search_command).
 
         Returns:
-            True if search was triggered, False if skipped
+            True if search was triggered, False if skipped or failed
+        """
+        return self.dispatch_search(item_id, endpoint, force=force, seasons=seasons) == SEARCH_SENT
+
+    def dispatch_search(self, item_id: int, endpoint: str, force: bool = False,
+                        seasons: Optional[List[int]] = None) -> str:
+        """
+        Search for an item and tell the result: SEARCH_SENT, SEARCH_SKIPPED (flag,
+        cooldown, nothing to search, dry run) or SEARCH_FAILED (Sonarr could not be
+        read or the command failed; the caller can retry).
         """
         if not self.trigger_search_on_update and not force:
-            return False
+            return SEARCH_SKIPPED
 
+        # The cooldown is per scope: the whole item ('all') or a tuple of seasons.
+        # A search of season 2 does not cover a later request for season 3.
         scope = 'all' if not seasons else tuple(sorted({int(s) for s in seasons}))
-        with self.__dict__.setdefault('_search_lock', threading.Lock()):
-            scopes = self.__dict__.setdefault('last_scope_searches', {})
-            now = time.time()
-            # Per-item cooldown, per scope: a search of the whole item also covers a
-            # season scope, but a search of season 2 does not cover a request for season 3.
-            for key in {(item_id, 'all'), (item_id, scope)}:
-                last_search = scopes.get(key)
-                if last_search and now - last_search < self.search_cooldown_seconds:
-                    logger.debug(f"[{self.name}] Skipping search for {endpoint} {item_id} {scope} "
-                                 f"(searched {now - last_search:.0f}s ago, cooldown: {self.search_cooldown_seconds}s)")
-                    return False
+        key = (item_id, scope)
+        if self._in_cooldown(key, endpoint):
+            return SEARCH_SKIPPED
 
-            # Check global search rate limit (inside the lock, so parallel callers wait in turn)
+        # Build the command before the lock: for a series it can read Sonarr (with retries).
+        if endpoint == 'movie':
+            command = {
+                'name': 'MoviesSearch',
+                'movieIds': [item_id]
+            }
+        else:  # series
+            try:
+                command = self._series_search_command(item_id, seasons)
+            except SearchScopeError as e:
+                logger.warning(f"[{self.name}] {e}")
+                return SEARCH_FAILED
+            if command is None:
+                return SEARCH_SKIPPED
+
+        if self.dry_run:
+            logger.info(f"[{self.name}] [DRY-RUN] Would trigger search: {command}")
+            return SEARCH_SKIPPED
+
+        # Webhook threads and the scheduled run search at the same time: the cooldown
+        # check, the rate-limit wait, the command and the timestamps are one step.
+        with self.__dict__.setdefault('_search_lock', threading.Lock()):
+            if self._in_cooldown(key, endpoint):
+                return SEARCH_SKIPPED
+
             time_since_any = time.time() - self.last_any_search
             if time_since_any < self.min_search_interval_seconds:
                 wait_time = self.min_search_interval_seconds - time_since_any
                 logger.debug(f"[{self.name}] Waiting {wait_time:.1f}s for search rate limit...")
                 time.sleep(wait_time)
 
-            # Build search command
-            if endpoint == 'movie':
-                command = {
-                    'name': 'MoviesSearch',
-                    'movieIds': [item_id]
-                }
-            else:  # series
-                command = self._series_search_command(item_id, seasons)
-                if command is None:
-                    return False
-
-            # Execute search
-            if self.dry_run:
-                logger.info(f"[{self.name}] [DRY-RUN] Would trigger search: {command}")
-                return False
-
             try:
                 self._post('command', command)
-                logger.info(f"[{self.name}] ✓ Triggered search for {endpoint} ID {item_id}")
-
-                # Update tracking
-                searched_at = time.time()
-                self.last_triggered_searches[item_id] = searched_at
-                scopes[(item_id, scope)] = searched_at
-                if command['name'] in ('MoviesSearch', 'SeriesSearch'):
-                    scopes[(item_id, 'all')] = searched_at
-                self.last_any_search = searched_at
-
-                return True
             except Exception as e:
                 logger.warning(f"[{self.name}] Failed to trigger search for {endpoint} {item_id}: {e}")
-                return False
+                return SEARCH_FAILED
+            logger.info(f"[{self.name}] ✓ Triggered search for {endpoint} ID {item_id}")
+
+            searched_at = time.time()
+            self.last_triggered_searches[item_id] = searched_at
+            self.__dict__.setdefault('last_scope_searches', {})[key] = searched_at
+            self.last_any_search = searched_at
+            return SEARCH_SENT
+
+    def _in_cooldown(self, key, endpoint: str) -> bool:
+        last_search = self.__dict__.setdefault('last_scope_searches', {}).get(key)
+        if last_search and time.time() - last_search < self.search_cooldown_seconds:
+            logger.debug(f"[{self.name}] Skipping search for {endpoint} {key[0]} {key[1]} "
+                         f"(searched {time.time() - last_search:.0f}s ago, cooldown: {self.search_cooldown_seconds}s)")
+            return True
+        return False
 
     def _series_search_command(self, series_id: int, seasons: Optional[List[int]]) -> Optional[Dict]:
         """
@@ -343,8 +362,9 @@ class ArrInstance(APIClient):
         In all other cases search only the aired episodes without a file in the
         requested seasons (EpisodeSearch). This can miss a season pack that the
         indexers return only for a season query; the RSS sync can still find it.
-        Returns None if there is nothing to search, or if the series cannot be read
-        (a scoped request is never widened to the whole series).
+        Returns None if there is nothing to search. Raises SearchScopeError if the
+        series cannot be read (a scoped request is never widened to the whole series;
+        the webhook retries it).
         """
         series_search = {'name': 'SeriesSearch', 'seriesId': series_id}
         if not seasons:
@@ -370,9 +390,8 @@ class ArrInstance(APIClient):
                 if aired_at and aired_at <= now:
                     episode_ids.append(episode['id'])
         except Exception as e:
-            logger.warning(f"[{self.name}] Could not read series {series_id} ({e}); no search for seasons "
-                           f"{sorted(requested)} (the request stays, search it manually or wait for RSS)")
-            return None
+            raise SearchScopeError(f"Could not read series {series_id} ({e}); no search for seasons "
+                                   f"{sorted(requested)} at this time") from e
 
         if not episode_ids:
             logger.info(f"[{self.name}] Series {series_id}: no aired episode without a file in seasons {sorted(requested)}, no search")

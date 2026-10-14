@@ -32,6 +32,8 @@ def make_server(overseerr=None, arrs=()):
     server = WebhookServer(port=0, auth_token="secret",
                            overseerr_instances=[overseerr] if overseerr else [], arr_instances=list(arrs))
     server.process_async = False
+    server.retries = []
+    server.retry_timer = lambda delay, function, retry: server.retries.append((delay, retry))
     return server
 
 
@@ -151,7 +153,7 @@ def test_nothing_to_search_gives_none():
     assert arr._series_search_command(9, [2]) is None
 
 
-def test_read_error_gives_no_search_and_no_series_search(monkeypatch):
+def test_read_error_raises_and_never_gives_series_search(monkeypatch):
     arr = make_arr(SERIES_S1_S2, EPISODES)
     calls = []
 
@@ -161,7 +163,8 @@ def test_read_error_gives_no_search_and_no_series_search(monkeypatch):
 
     arr._get = broken
     monkeypatch.setattr(TAGGER_MODULE.time, "sleep", lambda _s: None)
-    assert arr._series_search_command(9, [2]) is None
+    with pytest.raises(TAGGER_MODULE.SearchScopeError):
+        arr._series_search_command(9, [2])
     assert len(calls) == 3  # retried, then given up without widening the scope
 
 
@@ -227,9 +230,11 @@ class FakeSonarr:
         self.updates.append(search)
         return True
 
-    def trigger_search_for_item(self, item_id, endpoint, force=False, seasons=None):
+    result = "sent"
+
+    def dispatch_search(self, item_id, endpoint, force=False, seasons=None):
         self.searches.append((item_id, endpoint, force, seasons))
-        return True
+        return self.result
 
 
 @pytest.mark.parametrize("kind", ["MEDIA_AUTO_APPROVED", "MEDIA_APPROVED"])
@@ -295,11 +300,38 @@ def test_cooldown_is_per_season_scope():
     assert [p["episodeIds"] for p in arr.posted] == [[21], [31]]
 
 
-def test_series_search_covers_a_later_scope():
+def test_scoped_series_search_does_not_block_a_later_season():
+    series = {"seasons": [{"seasonNumber": 2, "monitored": True}, {"seasonNumber": 3, "monitored": False}]}
+    episodes = EPISODES + [{"id": 31, "seasonNumber": 3, "hasFile": False, "airDateUtc": iso(-2)}]
+    arr = make_dispatch_arr(series, episodes)
+    assert arr.trigger_search_for_item(9, "series", force=True, seasons=[2]) is True  # SeriesSearch (S2 only)
+    series["seasons"][1]["monitored"] = True  # Seerr monitors S3 for the second request
+    series["seasons"][0]["monitored"] = True
+    assert arr.trigger_search_for_item(9, "series", force=True, seasons=[3]) is True
+    assert arr.posted == [{"name": "SeriesSearch", "seriesId": 9}, {"name": "EpisodeSearch", "episodeIds": [31]}]
+
+
+def test_same_scope_is_in_cooldown():
     arr = make_dispatch_arr(SERIES_S2_ONLY, EPISODES)
-    assert arr.trigger_search_for_item(9, "series", force=True) is True
-    assert arr.trigger_search_for_item(9, "series", force=True, seasons=[2]) is False
-    assert arr.posted == [{"name": "SeriesSearch", "seriesId": 9}]
+    assert arr.dispatch_search(9, "series", force=True, seasons=[2]) == "sent"
+    assert arr.dispatch_search(9, "series", force=True, seasons=[2]) == "skipped"
+    assert arr.dispatch_search(9, "series", force=True) == "sent"  # unscoped is a different scope
+    assert arr.dispatch_search(9, "series", force=True) == "skipped"
+
+
+def test_dispatch_reports_failures(monkeypatch):
+    monkeypatch.setattr(TAGGER_MODULE.time, "sleep", lambda _s: None)
+    arr = make_dispatch_arr(SERIES_S1_S2, EPISODES)
+
+    def broken(*_args, **_kwargs):
+        raise RuntimeError("timeout")
+
+    arr._get = broken
+    assert arr.dispatch_search(9, "series", force=True, seasons=[2]) == "failed"
+    arr2 = make_dispatch_arr(SERIES_S2_ONLY, EPISODES)
+    arr2._post = broken
+    assert arr2.dispatch_search(9, "series", force=True, seasons=[2]) == "failed"
+    assert arr2.dispatch_search(9, "series", force=True, seasons=[2]) == "failed"  # no cooldown after a failure
 
 
 def test_parallel_searches_for_one_item_send_one_command():
@@ -373,3 +405,72 @@ def test_each_overseerr_instance_polls_at_its_own_interval():
         assert sorted(job.interval for job in schedule.jobs) == [2, 30]
     finally:
         schedule.clear()
+
+
+# webhook retries
+
+def test_tv_request_without_seasons_is_retried_not_widened():
+    sonarr = FakeSonarr()
+    overseerr = FakeOverseerr(sonarr, seasons=[2])
+    overseerr.get_request = lambda request_id: None  # Seerr not readable
+    server = make_server(overseerr, [sonarr])
+    server.process_media_request(payload("MEDIA_APPROVED"))
+    assert sonarr.searches == []
+    assert [d for d, _ in server.retries] == [60]
+
+
+def test_unmapped_tv_request_without_seasons_is_retried_not_widened():
+    sonarr = FakeSonarr()
+    overseerr = FakeOverseerr(sonarr, seasons=[2])
+    overseerr.sonarr_mapping = {}
+    overseerr.get_request = lambda request_id: None
+    server = make_server(overseerr, [sonarr])
+    server.process_media_request(payload("MEDIA_AUTO_APPROVED"))
+    assert sonarr.searches == []
+    assert len(server.retries) == 1
+
+
+def test_failed_search_is_retried_for_that_instance_until_it_works():
+    sonarr = FakeSonarr()
+    sonarr.result = "failed"
+    overseerr = FakeOverseerr(sonarr, seasons=[2])
+    server = make_server(overseerr, [sonarr])
+    server.process_media_request(payload("MEDIA_APPROVED"))
+    (delay, retry), = server.retries
+    assert delay == 60 and retry["_langarr_only"] == ["4k"] and retry["_langarr_attempt"] == 1
+    sonarr.result = "sent"  # Sonarr is back
+    server.process_media_request(retry)
+    assert sonarr.searches == [(3, "series", True, [2])] * 2
+    assert len(server.retries) == 1  # no more retries
+
+
+def test_retries_stop_after_the_last_delay():
+    sonarr = FakeSonarr()
+    sonarr.result = "failed"
+    server = make_server(FakeOverseerr(sonarr, seasons=[2]), [sonarr])
+    server.process_media_request(payload("MEDIA_APPROVED"))
+    while server.retries and len(server.retries) < 10:
+        _, retry = server.retries[-1]
+        before = len(server.retries)
+        server.process_media_request(retry)
+        if len(server.retries) == before:
+            break
+    assert [d for d, _ in server.retries] == [60, 300, 900]
+
+
+def test_pending_request_is_not_retried():
+    sonarr = FakeSonarr()
+    sonarr.find_item_by_tmdb_id = lambda tmdb_id: None
+    server = make_server(FakeOverseerr(sonarr, seasons=[2]), [sonarr])
+    server.process_media_request(payload("MEDIA_PENDING"))
+    assert server.retries == []
+
+
+def test_senders_cannot_set_internal_retry_keys(monkeypatch):
+    server = make_server()
+    seen = []
+    monkeypatch.setattr(server, "process_media_request", lambda p: seen.append(p))
+    body = payload("MEDIA_APPROVED")
+    body["_langarr_only"] = ["main"]
+    server.app.test_client().post("/webhook", json=body, headers={"X-Auth-Token": "secret"})
+    assert "_langarr_only" not in seen[0]
