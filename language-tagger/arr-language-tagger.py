@@ -254,7 +254,8 @@ class ArrInstance(APIClient):
             return False
         return True
 
-    def trigger_search_for_item(self, item_id: int, endpoint: str, force: bool = False) -> bool:
+    def trigger_search_for_item(self, item_id: int, endpoint: str, force: bool = False,
+                                seasons: Optional[List[int]] = None) -> bool:
         """
         Trigger automatic search for specific item after profile update.
 
@@ -265,6 +266,8 @@ class ArrInstance(APIClient):
                 cooldown (search_cooldown_seconds) and the global rate limit
                 (min_search_interval_seconds) still apply, so a large burst of force=True
                 calls cannot saturate the indexer.
+            seasons: For a series, the seasons of a Seerr request. Only these seasons
+                are searched (see _series_search_command).
 
         Returns:
             True if search was triggered, False if skipped
@@ -295,10 +298,9 @@ class ArrInstance(APIClient):
                 'movieIds': [item_id]
             }
         else:  # series
-            command = {
-                'name': 'SeriesSearch',
-                'seriesId': item_id
-            }
+            command = self._series_search_command(item_id, seasons)
+            if command is None:
+                return False
 
         # Execute search
         if self.dry_run:
@@ -317,6 +319,51 @@ class ArrInstance(APIClient):
         except Exception as e:
             logger.warning(f"[{self.name}] Failed to trigger search for {endpoint} {item_id}: {e}")
             return False
+
+    def _series_search_command(self, series_id: int, seasons: Optional[List[int]]) -> Optional[Dict]:
+        """
+        Search command for a series request.
+
+        SeriesSearch searches all monitored seasons. For a first request that is only
+        the requested seasons (Seerr monitors them), and it also takes season packs.
+        A later request for another season of a series that has more monitored
+        seasons must not search all of them again: then search only the aired
+        episodes without a file in the requested seasons (EpisodeSearch).
+        Returns None if the requested seasons have nothing to search.
+        """
+        series_search = {'name': 'SeriesSearch', 'seriesId': series_id}
+        if not seasons:
+            return series_search
+
+        requested = {int(s) for s in seasons}
+        try:
+            series = self._get(f"series/{series_id}")
+            monitored = {s.get('seasonNumber') for s in series.get('seasons', [])
+                         if s.get('monitored') and (s.get('seasonNumber') or 0) > 0}
+            if not monitored - requested:
+                return series_search
+
+            now = datetime.now(timezone.utc)
+            episode_ids = []
+            for episode in self._get('episode', params={'seriesId': series_id}):
+                if episode.get('seasonNumber') not in requested or episode.get('hasFile'):
+                    continue
+                aired = episode.get('airDateUtc')
+                try:
+                    aired_at = datetime.fromisoformat(aired.replace('Z', '+00:00')) if aired else None
+                except ValueError:
+                    aired_at = None
+                if aired_at and aired_at <= now:
+                    episode_ids.append(episode['id'])
+        except Exception as e:
+            logger.warning(f"[{self.name}] Could not read seasons of series {series_id} ({e}); searching the series")
+            return series_search
+
+        if not episode_ids:
+            logger.info(f"[{self.name}] Series {series_id}: no aired episode without a file in seasons {sorted(requested)}, no search")
+            return None
+        logger.info(f"[{self.name}] Series {series_id}: searching {len(episode_ids)} episode(s) of seasons {sorted(requested)} only")
+        return {'name': 'EpisodeSearch', 'episodeIds': episode_ids}
 
     def test_connection(self) -> bool:
         """Test API connection."""
@@ -1484,6 +1531,14 @@ class ArrLanguageTagger:
         # Run audio tag processing after profile sync
         self.run_audio_tags()
 
+    def poll_overseerr(self) -> None:
+        """Process pending requests of all Overseerr instances (scheduled job)."""
+        for overseerr in self.overseerr_instances:
+            try:
+                overseerr.process_pending_requests()
+            except Exception as e:
+                logger.error(f"Error processing Overseerr '{overseerr.name}': {e}", exc_info=True)
+
     def run_scheduled(self) -> None:
         """Run on schedule."""
         schedule_config = self.config.get('schedule', {})
@@ -1498,6 +1553,15 @@ class ArrLanguageTagger:
 
         # Schedule profile sync job
         schedule.every(interval_hours).hours.do(self.run_once)
+
+        # Without the webhook, poll pending Seerr/Overseerr requests at their own
+        # (shorter) interval, as config.example.yml describes for poll_interval_minutes.
+        # Before, the poll only ran with the full sync (interval_hours).
+        enabled_overseerr = [o for o in self.overseerr_instances if o.enabled]
+        if enabled_overseerr and not self.webhook_server:
+            poll_minutes = max(1, min(int(o.poll_interval_minutes) for o in enabled_overseerr))
+            logger.info(f"Polling pending Overseerr requests every {poll_minutes} minutes")
+            schedule.every(poll_minutes).minutes.do(self.poll_overseerr)
 
         # Schedule audio tag job (can have separate interval)
         if self.audio_tag_processor:

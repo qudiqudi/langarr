@@ -215,7 +215,8 @@ services:
 - Authorization Header: `your-secure-random-token-here` (must match config.yml auth_token)
   - **Note:** Enter just the token value, not `X-Auth-Token:` or `Bearer`
   - The server accepts: `Authorization`, `Bearer <token>`, or `X-Auth-Token` formats
-- Enable: **Media Auto Approved** + **Media Pending**
+- Enable: **Media Auto Approved** + **Media Pending** + **Media Approved**
+  - **Media Approved** is necessary for requests that an admin approves by hand: Seerr sends only this event for them
 
 **How it works:**
 ```
@@ -223,7 +224,9 @@ User requests → Webhook fires → Langarr updates profile in Radarr
 → Triggers search → Downloads with correct quality ✅
 ```
 
-**Without webhook:** Profiles updated every 24 hours (still works, just slower)
+Seerr adds the item to Radarr/Sonarr at the same time as it sends the webhook, so Langarr retries the lookup for about 30 seconds. For a TV request, Langarr searches only the requested seasons: a first request gets a series search (Seerr monitors only the requested seasons), a request for another season of a series that is already there gets an episode search for the missing, aired episodes of that season.
+
+**Without webhook:** Pending requests are polled every `poll_interval_minutes`, profiles are updated every 24 hours (still works, just slower)
 
 ## How It Works
 

@@ -4,8 +4,10 @@ Webhook Server for Seerr/Overseerr Integration
 ===============================================
 Receives webhook notifications from Seerr/Overseerr and processes requests in real-time.
 
-Handles MEDIA_AUTO_APPROVED and MEDIA_PENDING events to update profiles before
-the request is fully processed by Radarr/Sonarr.
+Handles MEDIA_PENDING, MEDIA_AUTO_APPROVED and MEDIA_APPROVED events to update
+profiles before the request is fully processed by Radarr/Sonarr. A request that a
+person approves later only sends MEDIA_APPROVED, so that event must start the
+profile update and the search as well.
 """
 
 import logging
@@ -22,6 +24,14 @@ from threading import Thread
 from constants import INSECURE_BYPASS_TOKEN
 
 logger = logging.getLogger(__name__)
+
+# Notification types that carry a media request
+MEDIA_REQUEST_TYPES = ('MEDIA_PENDING', 'MEDIA_AUTO_APPROVED', 'MEDIA_APPROVED')
+
+# Seerr sends the webhook while it adds the item to Radarr/Sonarr, so the item can
+# be missing for some seconds. Approved requests retry the lookup with these waits
+# (about 30 s in total); a pending request is not in Radarr/Sonarr yet, one try.
+ITEM_LOOKUP_DELAYS = (0.5, 1, 2, 4, 8, 15)
 
 
 class WebhookServer:
@@ -59,6 +69,9 @@ class WebhookServer:
         self.is_insecure_mode = (allow_insecure and auth_token == INSECURE_BYPASS_TOKEN)
         self.overseerr_instances = overseerr_instances
         self.arr_instances = arr_instances
+        # Process requests in a background thread, so a slow lookup (retries) does not
+        # hold the HTTP response that Seerr waits for. Tests set this to False.
+        self.process_async = True
 
         # Create Flask app
         self.app = Flask(__name__)
@@ -106,7 +119,7 @@ class WebhookServer:
             return False, "Missing or invalid 'notification_type' field"
 
         # For media notifications, validate required fields
-        if notification_type in ['MEDIA_PENDING', 'MEDIA_AUTO_APPROVED']:
+        if notification_type in MEDIA_REQUEST_TYPES:
             media = payload.get('media')
             if not isinstance(media, dict):
                 return False, "Missing or invalid 'media' field"
@@ -177,8 +190,11 @@ class WebhookServer:
             logger.debug(f"Webhook payload: {json.dumps(payload, indent=2)}")
 
             # Process relevant notification types
-            if notification_type in ['MEDIA_PENDING', 'MEDIA_AUTO_APPROVED']:
-                self.process_media_request(payload)
+            if notification_type in MEDIA_REQUEST_TYPES:
+                if self.process_async:
+                    Thread(target=self.process_media_request, args=(payload,), daemon=True).start()
+                else:
+                    self.process_media_request(payload)
             else:
                 logger.debug(f"Ignoring notification type: {notification_type}")
 
@@ -195,9 +211,10 @@ class WebhookServer:
         Flow:
         1. Extract TMDB ID and media type
         2. Determine correct profile using Overseerr instance logic
-        3. Find item in Radarr/Sonarr by TMDB ID
+        3. Find item in Radarr/Sonarr by TMDB ID (with retries for approved requests)
         4. Update profile in both Seerr and Radarr/Sonarr
-        5. Trigger search
+        5. Trigger search (for a TV request only the requested seasons, see
+           ArrInstance.trigger_search_for_item)
         """
         try:
             # Extract media info
@@ -206,6 +223,7 @@ class WebhookServer:
             media_type = media.get('media_type')  # 'movie' or 'tv'
 
             # Extract request info
+            notification_type = payload.get('notification_type')
             request_data = payload.get('request', {})
             request_id = request_data.get('request_id')
 
@@ -236,10 +254,17 @@ class WebhookServer:
                 service_type = 'sonarr'
                 endpoint = 'series'
 
-            arr_instances = self.select_arr_instances(overseerr, service_type, request_id)
+            # Read the request once: it gives the target server (is4k/serverId) and,
+            # for TV, the requested seasons. The webhook payload carries neither.
+            request_obj = overseerr.get_request(int(request_id)) if str(request_id or '').isdigit() else None
+
+            arr_instances = self.select_arr_instances(overseerr, service_type, request_id, request_obj)
 
             if not arr_instances:
                 return
+
+            seasons = self.requested_seasons(request_obj) if media_type == 'tv' else None
+            attempts = 1 if notification_type == 'MEDIA_PENDING' else len(ITEM_LOOKUP_DELAYS)
 
             # Process each arr instance
             for arr in arr_instances:
@@ -253,13 +278,12 @@ class WebhookServer:
                 logger.debug(f"[{arr.name}] Debug: original_language='{original_language}', should_dub={should_dub}, original_languages={arr.original_languages}, language_id_map={arr.language_id_map}")
                 logger.info(f"[{arr.name}] {media_type} TMDB {tmdb_id}: {original_language} → {correct_profile_name}")
 
-                # Find item in Radarr/Sonarr by TMDB ID
-                # Give it a moment to be added by Seerr
-                time.sleep(0.5)
-
-                item = arr.find_item_by_tmdb_id(int(tmdb_id))
+                # Find item in Radarr/Sonarr by TMDB ID. Seerr adds it at about the
+                # same time as it sends the webhook, thus wait and retry.
+                item = self.find_item_with_retry(arr, int(tmdb_id), attempts)
                 if not item:
-                    logger.warning(f"[{arr.name}] Could not find {media_type} with TMDB ID {tmdb_id} (may not be added yet)")
+                    logger.warning(f"[{arr.name}] Could not find {media_type} with TMDB ID {tmdb_id} "
+                                   f"after {attempts} attempt(s) (may not be added yet)")
                     continue
 
                 item_id = item.get('id')
@@ -274,13 +298,36 @@ class WebhookServer:
                     logger.info(f"[{arr.name}] No update needed for {media_type} ID {item_id}")
 
                 # Always trigger search for webhook requests so the item starts downloading,
-                # bypassing trigger_search_on_update since webhook events represent explicit user intent
-                arr.trigger_search_for_item(item_id, endpoint, force=True)
+                # bypassing trigger_search_on_update since webhook events represent explicit user intent.
+                # For TV, search only the requested seasons.
+                arr.trigger_search_for_item(item_id, endpoint, force=True, seasons=seasons)
 
         except Exception as e:
             logger.error(f"Error processing media request: {e}", exc_info=True)
 
-    def select_arr_instances(self, overseerr, service_type: str, request_id) -> List:
+    @staticmethod
+    def find_item_with_retry(arr, tmdb_id: int, attempts: int) -> Optional[Dict]:
+        """Find the item by TMDB ID; wait before each attempt (ITEM_LOOKUP_DELAYS)."""
+        for delay in ITEM_LOOKUP_DELAYS[:max(1, attempts)]:
+            time.sleep(delay)
+            item = arr.find_item_by_tmdb_id(tmdb_id)
+            if item:
+                return item
+        return None
+
+    @staticmethod
+    def requested_seasons(request_obj: Optional[Dict]) -> Optional[List[int]]:
+        """Season numbers of a TV request, or None if the request does not list them."""
+        if not request_obj:
+            return None
+        seasons = []
+        for s in request_obj.get('seasons') or []:
+            number = s.get('seasonNumber') if isinstance(s, dict) else s
+            if isinstance(number, int):
+                seasons.append(number)
+        return sorted(set(seasons)) or None
+
+    def select_arr_instances(self, overseerr, service_type: str, request_id, request_obj: Optional[Dict] = None) -> List:
         """
         Select the arr instances that a request is for.
 
@@ -307,7 +354,8 @@ class WebhookServer:
             logger.debug(f"No {service_type} server mapping configured, processing all {service_type} instances")
             return all_instances
 
-        request_obj = overseerr.get_request(int(request_id)) if str(request_id or '').isdigit() else None
+        if request_obj is None and str(request_id or '').isdigit():
+            request_obj = overseerr.get_request(int(request_id))
         if not request_obj:
             logger.warning(f"Could not read request {request_id}; skipping it (the scheduled run will process the item)")
             return []
