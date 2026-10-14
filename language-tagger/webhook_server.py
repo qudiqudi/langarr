@@ -27,10 +27,13 @@ logger = logging.getLogger(__name__)
 
 # Notification types that carry a media request
 MEDIA_REQUEST_TYPES = ('MEDIA_PENDING', 'MEDIA_AUTO_APPROVED', 'MEDIA_APPROVED')
+# Only an approved request may start a search. A pending request only gets its
+# profile (if the item is there); the search follows with MEDIA_APPROVED.
+APPROVED_TYPES = ('MEDIA_AUTO_APPROVED', 'MEDIA_APPROVED')
 
 # Seerr sends the webhook while it adds the item to Radarr/Sonarr, so the item can
 # be missing for some seconds. Approved requests retry the lookup with these waits
-# (about 30 s in total); a pending request is not in Radarr/Sonarr yet, one try.
+# (30.5 s plus the API time); a pending request is not in Radarr/Sonarr yet, one try.
 ITEM_LOOKUP_DELAYS = (0.5, 1, 2, 4, 8, 15)
 
 
@@ -212,9 +215,9 @@ class WebhookServer:
         1. Extract TMDB ID and media type
         2. Determine correct profile using Overseerr instance logic
         3. Find item in Radarr/Sonarr by TMDB ID (with retries for approved requests)
-        4. Update profile in both Seerr and Radarr/Sonarr
-        5. Trigger search (for a TV request only the requested seasons, see
-           ArrInstance.trigger_search_for_item)
+        4. Update profile in Radarr/Sonarr, without the profile-change search
+        5. For an approved request only: trigger one search (for a TV request the
+           requested seasons, see ArrInstance._series_search_command)
         """
         try:
             # Extract media info
@@ -254,9 +257,13 @@ class WebhookServer:
                 service_type = 'sonarr'
                 endpoint = 'series'
 
-            # Read the request once: it gives the target server (is4k/serverId) and,
-            # for TV, the requested seasons. The webhook payload carries neither.
-            request_obj = overseerr.get_request(int(request_id)) if str(request_id or '').isdigit() else None
+            # Read the request once (get_request retries): it gives the target server
+            # (is4k/serverId) and, for TV, the requested seasons. The webhook payload
+            # carries neither. An unmapped movie request needs neither.
+            mapping = overseerr.radarr_mapping if service_type == 'radarr' else overseerr.sonarr_mapping
+            request_obj = None
+            if (mapping or media_type == 'tv') and str(request_id or '').isdigit():
+                request_obj = overseerr.get_request(int(request_id))
 
             arr_instances = self.select_arr_instances(overseerr, service_type, request_id, request_obj)
 
@@ -264,7 +271,8 @@ class WebhookServer:
                 return
 
             seasons = self.requested_seasons(request_obj) if media_type == 'tv' else None
-            attempts = 1 if notification_type == 'MEDIA_PENDING' else len(ITEM_LOOKUP_DELAYS)
+            approved = notification_type in APPROVED_TYPES
+            attempts = len(ITEM_LOOKUP_DELAYS) if approved else 1
 
             # Process each arr instance
             for arr in arr_instances:
@@ -291,14 +299,21 @@ class WebhookServer:
 
                 logger.info(f"[{arr.name}] Found {media_type} '{current_title}' (ID {item_id})")
 
-                # Update the item with correct profile
-                if arr.update_item(item, add_tag=should_dub):
+                # Update the item with correct profile. No profile-change search here:
+                # it would search the whole series and its cooldown would block the
+                # scoped search below.
+                if arr.update_item(item, add_tag=should_dub, search=False):
                     logger.info(f"[{arr.name}] ✓ Updated {media_type} ID {item_id} → {correct_profile_name}")
                 else:
                     logger.info(f"[{arr.name}] No update needed for {media_type} ID {item_id}")
 
-                # Always trigger search for webhook requests so the item starts downloading,
-                # bypassing trigger_search_on_update since webhook events represent explicit user intent.
+                if not approved:
+                    logger.info(f"[{arr.name}] Request {request_id} is pending: profile prepared, "
+                                f"the search follows with the approval")
+                    continue
+
+                # Trigger search for approved requests so the item starts downloading,
+                # bypassing trigger_search_on_update since the request is explicit user intent.
                 # For TV, search only the requested seasons.
                 arr.trigger_search_for_item(item_id, endpoint, force=True, seasons=seasons)
 
@@ -354,8 +369,6 @@ class WebhookServer:
             logger.debug(f"No {service_type} server mapping configured, processing all {service_type} instances")
             return all_instances
 
-        if request_obj is None and str(request_id or '').isdigit():
-            request_obj = overseerr.get_request(int(request_id))
         if not request_obj:
             logger.warning(f"Could not read request {request_id}; skipping it (the scheduled run will process the item)")
             return []

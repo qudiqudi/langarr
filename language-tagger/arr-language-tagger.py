@@ -22,6 +22,7 @@ import yaml
 import logging
 import schedule
 import fcntl
+import threading
 from datetime import datetime, timedelta, timezone
 from typing import List, Dict, Optional, Set
 from pathlib import Path
@@ -141,8 +142,12 @@ class ArrInstance(APIClient):
         self.only_monitored = config.get('only_monitored', False)
 
         # Search tracking
-        self.last_triggered_searches = {}  # {item_id: timestamp}
+        self.last_triggered_searches = {}  # {item_id: timestamp} of any search (bookkeeping)
+        self.last_scope_searches = {}  # {(item_id, scope): timestamp}, scope 'all' or a seasons tuple
         self.last_any_search = 0
+        # Webhook threads and the scheduled run search at the same time; the cooldown
+        # check, the rate-limit wait, the command and the timestamps must be one step.
+        self._search_lock = threading.Lock()
 
         # Bookmark previous-run time so newly-added items get searched even when no profile change was needed.
         if state_dir is None:
@@ -275,61 +280,71 @@ class ArrInstance(APIClient):
         if not self.trigger_search_on_update and not force:
             return False
 
-        # Check per-item cooldown
-        if item_id in self.last_triggered_searches:
-            last_search = self.last_triggered_searches[item_id]
-            time_since = time.time() - last_search
-            if time_since < self.search_cooldown_seconds:
-                logger.debug(f"[{self.name}] Skipping search for {endpoint} {item_id} "
-                           f"(searched {time_since:.0f}s ago, cooldown: {self.search_cooldown_seconds}s)")
+        scope = 'all' if not seasons else tuple(sorted({int(s) for s in seasons}))
+        with self.__dict__.setdefault('_search_lock', threading.Lock()):
+            scopes = self.__dict__.setdefault('last_scope_searches', {})
+            now = time.time()
+            # Per-item cooldown, per scope: a search of the whole item also covers a
+            # season scope, but a search of season 2 does not cover a request for season 3.
+            for key in {(item_id, 'all'), (item_id, scope)}:
+                last_search = scopes.get(key)
+                if last_search and now - last_search < self.search_cooldown_seconds:
+                    logger.debug(f"[{self.name}] Skipping search for {endpoint} {item_id} {scope} "
+                                 f"(searched {now - last_search:.0f}s ago, cooldown: {self.search_cooldown_seconds}s)")
+                    return False
+
+            # Check global search rate limit (inside the lock, so parallel callers wait in turn)
+            time_since_any = time.time() - self.last_any_search
+            if time_since_any < self.min_search_interval_seconds:
+                wait_time = self.min_search_interval_seconds - time_since_any
+                logger.debug(f"[{self.name}] Waiting {wait_time:.1f}s for search rate limit...")
+                time.sleep(wait_time)
+
+            # Build search command
+            if endpoint == 'movie':
+                command = {
+                    'name': 'MoviesSearch',
+                    'movieIds': [item_id]
+                }
+            else:  # series
+                command = self._series_search_command(item_id, seasons)
+                if command is None:
+                    return False
+
+            # Execute search
+            if self.dry_run:
+                logger.info(f"[{self.name}] [DRY-RUN] Would trigger search: {command}")
                 return False
 
-        # Check global search rate limit
-        time_since_any = time.time() - self.last_any_search
-        if time_since_any < self.min_search_interval_seconds:
-            wait_time = self.min_search_interval_seconds - time_since_any
-            logger.debug(f"[{self.name}] Waiting {wait_time:.1f}s for search rate limit...")
-            time.sleep(wait_time)
+            try:
+                self._post('command', command)
+                logger.info(f"[{self.name}] ✓ Triggered search for {endpoint} ID {item_id}")
 
-        # Build search command
-        if endpoint == 'movie':
-            command = {
-                'name': 'MoviesSearch',
-                'movieIds': [item_id]
-            }
-        else:  # series
-            command = self._series_search_command(item_id, seasons)
-            if command is None:
+                # Update tracking
+                searched_at = time.time()
+                self.last_triggered_searches[item_id] = searched_at
+                scopes[(item_id, scope)] = searched_at
+                if command['name'] in ('MoviesSearch', 'SeriesSearch'):
+                    scopes[(item_id, 'all')] = searched_at
+                self.last_any_search = searched_at
+
+                return True
+            except Exception as e:
+                logger.warning(f"[{self.name}] Failed to trigger search for {endpoint} {item_id}: {e}")
                 return False
-
-        # Execute search
-        if self.dry_run:
-            logger.info(f"[{self.name}] [DRY-RUN] Would trigger search: {command}")
-            return False
-
-        try:
-            self._post('command', command)
-            logger.info(f"[{self.name}] ✓ Triggered search for {endpoint} ID {item_id}")
-
-            # Update tracking
-            self.last_triggered_searches[item_id] = time.time()
-            self.last_any_search = time.time()
-
-            return True
-        except Exception as e:
-            logger.warning(f"[{self.name}] Failed to trigger search for {endpoint} {item_id}: {e}")
-            return False
 
     def _series_search_command(self, series_id: int, seasons: Optional[List[int]]) -> Optional[Dict]:
         """
         Search command for a series request.
 
-        SeriesSearch searches all monitored seasons. For a first request that is only
-        the requested seasons (Seerr monitors them), and it also takes season packs.
-        A later request for another season of a series that has more monitored
-        seasons must not search all of them again: then search only the aired
-        episodes without a file in the requested seasons (EpisodeSearch).
-        Returns None if the requested seasons have nothing to search.
+        SeriesSearch searches all monitored seasons (including specials). It is only
+        correct when the monitored seasons are exactly the requested seasons, as for a
+        first request (Seerr monitors only those); then it also finds season packs.
+        In all other cases search only the aired episodes without a file in the
+        requested seasons (EpisodeSearch). This can miss a season pack that the
+        indexers return only for a season query; the RSS sync can still find it.
+        Returns None if there is nothing to search, or if the series cannot be read
+        (a scoped request is never widened to the whole series).
         """
         series_search = {'name': 'SeriesSearch', 'seriesId': series_id}
         if not seasons:
@@ -337,15 +352,14 @@ class ArrInstance(APIClient):
 
         requested = {int(s) for s in seasons}
         try:
-            series = self._get(f"series/{series_id}")
-            monitored = {s.get('seasonNumber') for s in series.get('seasons', [])
-                         if s.get('monitored') and (s.get('seasonNumber') or 0) > 0}
-            if not monitored - requested:
+            series = self._get_with_retry(f"series/{series_id}")
+            monitored = {s.get('seasonNumber') for s in series.get('seasons', []) if s.get('monitored')}
+            if monitored == requested:
                 return series_search
 
             now = datetime.now(timezone.utc)
             episode_ids = []
-            for episode in self._get('episode', params={'seriesId': series_id}):
+            for episode in self._get_with_retry('episode', params={'seriesId': series_id}):
                 if episode.get('seasonNumber') not in requested or episode.get('hasFile'):
                     continue
                 aired = episode.get('airDateUtc')
@@ -356,14 +370,25 @@ class ArrInstance(APIClient):
                 if aired_at and aired_at <= now:
                     episode_ids.append(episode['id'])
         except Exception as e:
-            logger.warning(f"[{self.name}] Could not read seasons of series {series_id} ({e}); searching the series")
-            return series_search
+            logger.warning(f"[{self.name}] Could not read series {series_id} ({e}); no search for seasons "
+                           f"{sorted(requested)} (the request stays, search it manually or wait for RSS)")
+            return None
 
         if not episode_ids:
             logger.info(f"[{self.name}] Series {series_id}: no aired episode without a file in seasons {sorted(requested)}, no search")
             return None
         logger.info(f"[{self.name}] Series {series_id}: searching {len(episode_ids)} episode(s) of seasons {sorted(requested)} only")
         return {'name': 'EpisodeSearch', 'episodeIds': episode_ids}
+
+    def _get_with_retry(self, endpoint: str, params: Optional[Dict] = None, attempts: int = 3):
+        """GET with short retries (1 s, 2 s) for transient errors."""
+        for attempt in range(1, attempts + 1):
+            try:
+                return self._get(endpoint, params=params)
+            except Exception:
+                if attempt == attempts:
+                    raise
+                time.sleep(attempt)
 
     def test_connection(self) -> bool:
         """Test API connection."""
@@ -615,8 +640,13 @@ class ArrInstance(APIClient):
         # Not in original languages, prefer dub
         return True
 
-    def update_item(self, item: Dict, add_tag: bool) -> bool:
-        """Update item with appropriate tag and quality profile."""
+    def update_item(self, item: Dict, add_tag: bool, search: bool = True) -> bool:
+        """
+        Update item with appropriate tag and quality profile.
+
+        search: start the profile-change search (trigger_search_on_update). The webhook
+        sets it to False and starts one search itself, with the request's seasons.
+        """
         item_id = item['id']
         title = item['title']
 
@@ -681,7 +711,7 @@ class ArrInstance(APIClient):
                         time.sleep(self.update_delay)
 
                     # Trigger search if profile was changed
-                    if profile_changed:
+                    if profile_changed and search:
                         logger.debug(f"[{self.name}] Profile updated for '{title}', checking if search should be triggered...")
                         time.sleep(1)  # Brief delay to ensure update is processed
                         self.trigger_search_for_item(item_id, endpoint)
@@ -1531,13 +1561,25 @@ class ArrLanguageTagger:
         # Run audio tag processing after profile sync
         self.run_audio_tags()
 
-    def poll_overseerr(self) -> None:
-        """Process pending requests of all Overseerr instances (scheduled job)."""
+    def schedule_overseerr_polls(self) -> None:
+        """One polling job for each enabled Overseerr instance, at its own interval."""
         for overseerr in self.overseerr_instances:
+            if not overseerr.enabled:
+                continue
             try:
-                overseerr.process_pending_requests()
-            except Exception as e:
-                logger.error(f"Error processing Overseerr '{overseerr.name}': {e}", exc_info=True)
+                minutes = max(1, int(overseerr.poll_interval_minutes))
+            except (TypeError, ValueError):
+                minutes = 10
+            logger.info(f"[{overseerr.name}] Polling pending requests every {minutes} minutes")
+            schedule.every(minutes).minutes.do(self.poll_overseerr, overseerr)
+
+    @staticmethod
+    def poll_overseerr(overseerr) -> None:
+        """Update the profile of pending requests of one Overseerr instance (scheduled job)."""
+        try:
+            overseerr.process_pending_requests()
+        except Exception as e:
+            logger.error(f"Error processing Overseerr '{overseerr.name}': {e}", exc_info=True)
 
     def run_scheduled(self) -> None:
         """Run on schedule."""
@@ -1557,11 +1599,8 @@ class ArrLanguageTagger:
         # Without the webhook, poll pending Seerr/Overseerr requests at their own
         # (shorter) interval, as config.example.yml describes for poll_interval_minutes.
         # Before, the poll only ran with the full sync (interval_hours).
-        enabled_overseerr = [o for o in self.overseerr_instances if o.enabled]
-        if enabled_overseerr and not self.webhook_server:
-            poll_minutes = max(1, min(int(o.poll_interval_minutes) for o in enabled_overseerr))
-            logger.info(f"Polling pending Overseerr requests every {poll_minutes} minutes")
-            schedule.every(poll_minutes).minutes.do(self.poll_overseerr)
+        if not self.webhook_server:
+            self.schedule_overseerr_polls()
 
         # Schedule audio tag job (can have separate interval)
         if self.audio_tag_processor:

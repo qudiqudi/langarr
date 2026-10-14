@@ -224,9 +224,11 @@ User requests → Webhook fires → Langarr updates profile in Radarr
 → Triggers search → Downloads with correct quality ✅
 ```
 
-Seerr adds the item to Radarr/Sonarr at the same time as it sends the webhook, so Langarr retries the lookup for about 30 seconds. For a TV request, Langarr searches only the requested seasons: a first request gets a series search (Seerr monitors only the requested seasons), a request for another season of a series that is already there gets an episode search for the missing, aired episodes of that season.
+Seerr adds the item to Radarr/Sonarr at the same time as it sends the webhook, so for an approved request Langarr retries the lookup for 30.5 seconds (plus API time). A pending request only gets its profile; the search starts with the approval (**Media Approved** or **Media Auto Approved**).
 
-**Without webhook:** Pending requests are polled every `poll_interval_minutes`, profiles are updated every 24 hours (still works, just slower)
+For a TV request, Langarr searches the requested seasons: when they are exactly the monitored seasons of the series (a first request, Seerr monitors only them), it starts a series search, which also finds season packs. Otherwise it starts an episode search for the aired episodes without a file in the requested seasons. An episode search can miss a season pack; the RSS sync can still find it. If Langarr cannot read the series, it does not search instead of searching the whole series.
+
+**Without webhook:** The profile of pending requests is updated every `poll_interval_minutes` (each Seerr instance at its own interval; this poll does not search), and all profiles at the full sync interval (`schedule.interval_hours`, 24 hours by default).
 
 ## How It Works
 
