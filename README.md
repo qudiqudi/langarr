@@ -215,7 +215,8 @@ services:
 - Authorization Header: `your-secure-random-token-here` (must match config.yml auth_token)
   - **Note:** Enter just the token value, not `X-Auth-Token:` or `Bearer`
   - The server accepts: `Authorization`, `Bearer <token>`, or `X-Auth-Token` formats
-- Enable: **Media Auto Approved** + **Media Pending**
+- Enable: **Media Auto Approved** + **Media Pending** + **Media Approved**
+  - **Media Approved** is necessary for requests that an admin approves by hand: Seerr sends only this event for them
 
 **How it works:**
 ```
@@ -223,7 +224,11 @@ User requests → Webhook fires → Langarr updates profile in Radarr
 → Triggers search → Downloads with correct quality ✅
 ```
 
-**Without webhook:** Profiles updated every 24 hours (still works, just slower)
+Seerr adds the item to Radarr/Sonarr at the same time as it sends the webhook, so for an approved request Langarr retries the lookup for 30.5 seconds (plus API time). A pending request only gets its profile; the search starts with the approval (**Media Approved** or **Media Auto Approved**). If the search of an approved request cannot start (Seerr or Sonarr not readable, item not added yet, command failed), Langarr tries again after 1, 5 and 15 minutes. These retries are kept in memory: a restart of Langarr loses them.
+
+For a TV request, Langarr searches the requested seasons: when they are exactly the monitored seasons of the series (a first request, Seerr monitors only them), it starts a series search, which also finds season packs. Otherwise it starts an episode search for the aired episodes without a file in the requested seasons. An episode search can miss a season pack; the RSS sync can still find it. If Langarr cannot read the request or the series, it does not search the whole series; it retries the scoped search instead.
+
+**Without webhook:** The profile of pending requests is updated every `poll_interval_minutes` (each Seerr instance at its own interval; this poll does not search), and all profiles at the full sync interval (`schedule.interval_hours`, 24 hours by default).
 
 ## How It Works
 
