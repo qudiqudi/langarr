@@ -224,7 +224,7 @@ User requests → Webhook fires → Langarr updates profile in Radarr
 → Triggers search → Downloads with correct quality ✅
 ```
 
-Seerr adds the item to Radarr/Sonarr at the same time as it sends the webhook, so for an approved request Langarr retries the lookup for 30.5 seconds (plus API time). A pending request only gets its profile; the search starts with the approval (**Media Approved** or **Media Auto Approved**). If the search of an approved request cannot start (Seerr or Sonarr not readable, item not added yet, command failed), Langarr tries again after 1, 5 and 15 minutes.
+Seerr adds the item to Radarr/Sonarr at the same time as it sends the webhook, so for an approved request Langarr retries the lookup for 30.5 seconds (plus API time). A pending request only gets its profile; the search starts with the approval (**Media Approved** or **Media Auto Approved**). If the search of an approved request cannot start (Seerr or Sonarr not readable, item not added yet, command failed), Langarr tries again after 1, 5 and 15 minutes. These retries are kept in memory: a restart of Langarr loses them.
 
 For a TV request, Langarr searches the requested seasons: when they are exactly the monitored seasons of the series (a first request, Seerr monitors only them), it starts a series search, which also finds season packs. Otherwise it starts an episode search for the aired episodes without a file in the requested seasons. An episode search can miss a season pack; the RSS sync can still find it. If Langarr cannot read the request or the series, it does not search the whole series; it retries the scoped search instead.
 

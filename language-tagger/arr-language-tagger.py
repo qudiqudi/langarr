@@ -300,27 +300,12 @@ class ArrInstance(APIClient):
         if self._in_cooldown(key, endpoint):
             return SEARCH_SKIPPED
 
-        # Build the command before the lock: for a series it can read Sonarr (with retries).
-        if endpoint == 'movie':
-            command = {
-                'name': 'MoviesSearch',
-                'movieIds': [item_id]
-            }
-        else:  # series
-            try:
-                command = self._series_search_command(item_id, seasons)
-            except SearchScopeError as e:
-                logger.warning(f"[{self.name}] {e}")
-                return SEARCH_FAILED
-            if command is None:
-                return SEARCH_SKIPPED
-
-        if self.dry_run:
-            logger.info(f"[{self.name}] [DRY-RUN] Would trigger search: {command}")
-            return SEARCH_SKIPPED
-
         # Webhook threads and the scheduled run search at the same time: the cooldown
         # check, the rate-limit wait, the command and the timestamps are one step.
+        # The series command is built after the wait, inside the lock, so it uses the
+        # monitored seasons of that moment (Seerr can monitor a new season meanwhile).
+        # A Sonarr outage can thus hold the lock for the read retries; searches are
+        # serialized anyway.
         with self.__dict__.setdefault('_search_lock', threading.Lock()):
             if self._in_cooldown(key, endpoint):
                 return SEARCH_SKIPPED
@@ -330,6 +315,24 @@ class ArrInstance(APIClient):
                 wait_time = self.min_search_interval_seconds - time_since_any
                 logger.debug(f"[{self.name}] Waiting {wait_time:.1f}s for search rate limit...")
                 time.sleep(wait_time)
+
+            if endpoint == 'movie':
+                command = {
+                    'name': 'MoviesSearch',
+                    'movieIds': [item_id]
+                }
+            else:  # series
+                try:
+                    command = self._series_search_command(item_id, seasons)
+                except SearchScopeError as e:
+                    logger.warning(f"[{self.name}] {e}")
+                    return SEARCH_FAILED
+                if command is None:
+                    return SEARCH_SKIPPED
+
+            if self.dry_run:
+                logger.info(f"[{self.name}] [DRY-RUN] Would trigger search: {command}")
+                return SEARCH_SKIPPED
 
             try:
                 self._post('command', command)

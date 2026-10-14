@@ -261,6 +261,8 @@ class WebhookServer:
             original_language = overseerr.get_media_language(media_type, int(tmdb_id))
             if not original_language:
                 logger.warning(f"Could not determine language for TMDB {tmdb_id}")
+                if approved:
+                    self.schedule_retry(payload, only_instances, "language not readable")
                 return
 
             # Determine service type and arr instances
@@ -288,11 +290,13 @@ class WebhookServer:
                 self.schedule_retry(payload, only_instances, "request not readable")
                 return
 
-            arr_instances = self.select_arr_instances(overseerr, service_type, request_id, request_obj)
+            arr_instances, transient = self._select_arr_instances(overseerr, service_type, request_id, request_obj)
             if only_instances:
                 arr_instances = [arr for arr in arr_instances if arr.name in only_instances]
 
             if not arr_instances:
+                if transient and approved:
+                    self.schedule_retry(payload, only_instances, "target server not resolvable")
                 return
 
             attempts = len(ITEM_LOOKUP_DELAYS) if approved else 1
@@ -394,6 +398,11 @@ class WebhookServer:
         return sorted(set(seasons)) or None
 
     def select_arr_instances(self, overseerr, service_type: str, request_id, request_obj: Optional[Dict] = None) -> List:
+        """The arr instances for a request (see _select_arr_instances)."""
+        return self._select_arr_instances(overseerr, service_type, request_id, request_obj)[0]
+
+    def _select_arr_instances(self, overseerr, service_type: str, request_id,
+                              request_obj: Optional[Dict] = None) -> Tuple[List, bool]:
         """
         Select the arr instances that a request is for.
 
@@ -408,35 +417,39 @@ class WebhookServer:
         cannot be read or resolved is skipped: sending it to all instances would
         change the profile of the same item in the wrong instance (for example the
         HD Radarr for a 4K request) and start a search there.
+
+        Returns (instances, transient): transient is True when the selection is empty
+        because data could not be read (request, default server), so a retry can help;
+        False when no instance is configured for the target.
         """
         all_instances = [arr for arr in self.arr_instances if arr.service_type == service_type]
 
         if not all_instances:
             logger.warning(f"No {service_type} instances configured")
-            return []
+            return [], False
 
         mapping = overseerr.radarr_mapping if service_type == 'radarr' else overseerr.sonarr_mapping
         if not mapping:
             logger.debug(f"No {service_type} server mapping configured, processing all {service_type} instances")
-            return all_instances
+            return all_instances, False
 
         if not request_obj:
             logger.warning(f"Could not read request {request_id}; skipping it (the scheduled run will process the item)")
-            return []
+            return [], True
 
         is4k = bool(request_obj.get('is4k'))
         server_id, arr = overseerr.resolve_arr_instance(service_type, request_obj.get('serverId'), is4k)
 
         if server_id is None:
             logger.warning(f"Request {request_id}: could not determine the target {service_type} server; skipping it")
-            return []
+            return [], True
 
         if not arr:
             logger.info(f"Request {request_id} ({'4K' if is4k else 'non-4K'}) goes to {service_type} server {server_id}, which has no langarr instance; skipping")
-            return []
+            return [], False
 
         logger.info(f"Request {request_id} ({'4K' if is4k else 'non-4K'}) → {service_type} server {server_id} → instance '{arr.name}'")
-        return [arr]
+        return [arr], False
 
     def start(self):
         """Start webhook server in background thread."""

@@ -474,3 +474,62 @@ def test_senders_cannot_set_internal_retry_keys(monkeypatch):
     body["_langarr_only"] = ["main"]
     server.app.test_client().post("/webhook", json=body, headers={"X-Auth-Token": "secret"})
     assert "_langarr_only" not in seen[0]
+
+
+def test_command_uses_the_monitored_seasons_after_the_wait(monkeypatch):
+    series = {"seasons": [{"seasonNumber": 2, "monitored": True}, {"seasonNumber": 3, "monitored": False}]}
+    arr = make_dispatch_arr(series, EPISODES)
+    arr.min_search_interval_seconds = 10
+    arr.last_any_search = TAGGER_MODULE.time.time()  # forces the rate-limit wait
+
+    def wait(_seconds):
+        series["seasons"][1]["monitored"] = True  # Seerr monitors S3 during the wait
+
+    monkeypatch.setattr(TAGGER_MODULE.time, "sleep", wait)
+    assert arr.dispatch_search(9, "series", force=True, seasons=[2]) == "sent"
+    assert arr.posted == [{"name": "EpisodeSearch", "episodeIds": [21]}]  # not a SeriesSearch of S2 and S3
+
+
+@pytest.mark.parametrize("kind, retried", [("MEDIA_APPROVED", True), ("MEDIA_PENDING", False)])
+def test_language_read_error_is_retried_for_approved_requests(kind, retried):
+    sonarr = FakeSonarr()
+    overseerr = FakeOverseerr(sonarr, seasons=[2])
+    overseerr.get_media_language = lambda media_type, tmdb_id: None
+    server = make_server(overseerr, [sonarr])
+    server.process_media_request(payload(kind))
+    assert sonarr.searches == []
+    assert len(server.retries) == (1 if retried else 0)
+
+
+def test_unresolvable_default_server_is_retried():
+    sonarr = FakeSonarr()
+    overseerr = FakeOverseerr(sonarr, seasons=[2])
+    overseerr.resolve_arr_instance = lambda service_type, server_id, is4k: (None, None)
+    server = make_server(overseerr, [sonarr])
+    server.process_media_request(payload("MEDIA_APPROVED"))
+    assert len(server.retries) == 1
+
+
+def test_server_without_langarr_instance_is_not_retried():
+    sonarr = FakeSonarr()
+    overseerr = FakeOverseerr(sonarr, seasons=[2])
+    overseerr.resolve_arr_instance = lambda service_type, server_id, is4k: (5, None)
+    server = make_server(overseerr, [sonarr])
+    server.process_media_request(payload("MEDIA_APPROVED"))
+    assert server.retries == []
+
+
+def test_retry_targets_only_the_failed_instance():
+    good, bad = FakeSonarr(), FakeSonarr()
+    good.name, bad.name = "main", "4k"
+    bad.result = "failed"
+    overseerr = FakeOverseerr(good, seasons=[2])
+    overseerr.sonarr_mapping = {}  # unmapped: the request goes to all sonarr instances
+    server = make_server(overseerr, [good, bad])
+    server.process_media_request(payload("MEDIA_APPROVED"))
+    (_, retry), = server.retries
+    assert retry["_langarr_only"] == ["4k"]
+    bad.result = "sent"
+    server.process_media_request(retry)
+    assert len(good.searches) == 1  # not searched again by the retry
+    assert len(bad.searches) == 2
